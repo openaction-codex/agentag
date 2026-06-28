@@ -3,6 +3,7 @@
 namespace App\Tests\Command;
 
 use App\AgentTag\Configuration\AgentTagSettings;
+use App\AgentTag\Tool\ToolCatalog;
 use App\AgentTag\Workflow\WorkflowCatalog;
 use App\Command\ListRepositoriesCommand;
 use App\Command\ListToolsCommand;
@@ -28,13 +29,36 @@ triggers:
     - implement
 tools:
     - git
-    - codex
+YAML);
+        mkdir($this->workflowDirectory.'/tools');
+        file_put_contents($this->workflowDirectory.'/tools/git.yaml', <<<'YAML'
+name: git
+type: cli
+command: git
+allowed_workflows:
+    - developer
+working_directory: codebase
+environment:
+    - GIT_SSH_COMMAND
+timeout_seconds: 120
+sensitivity: non_sensitive
+sandbox: no_sandbox
 YAML);
     }
 
     #[\Override]
     protected function tearDown(): void
     {
+        foreach (glob($this->workflowDirectory.'/tools/*') ?: [] as $file) {
+            if (is_file($file)) {
+                unlink($file);
+            }
+        }
+
+        if (is_dir($this->workflowDirectory.'/tools')) {
+            rmdir($this->workflowDirectory.'/tools');
+        }
+
         foreach (glob($this->workflowDirectory.'/*') ?: [] as $file) {
             if (is_file($file)) {
                 unlink($file);
@@ -80,13 +104,14 @@ YAML);
 
     public function testListToolsCommandShowsWorkflowTools(): void
     {
-        $tester = new CommandTester(new ListToolsCommand($this->catalog()));
+        $tester = new CommandTester(new ListToolsCommand($this->toolCatalog()));
 
         $exitCode = $tester->execute([]);
 
         self::assertSame(Command::SUCCESS, $exitCode);
-        self::assertStringContainsString('codex', $tester->getDisplay());
         self::assertStringContainsString('git', $tester->getDisplay());
+        self::assertStringContainsString('non_sensitive', $tester->getDisplay());
+        self::assertStringContainsString('no_sandbox', $tester->getDisplay());
     }
 
     private function settings(): AgentTagSettings
@@ -102,5 +127,10 @@ YAML);
     private function catalog(): WorkflowCatalog
     {
         return new WorkflowCatalog($this->settings());
+    }
+
+    private function toolCatalog(): ToolCatalog
+    {
+        return new ToolCatalog($this->settings());
     }
 }

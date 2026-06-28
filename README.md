@@ -99,6 +99,27 @@ sensitivity_policy: confirm-sensitive
 
 After the global tag, users can select workflows explicitly with `workflow:developer` or `/developer`. If no explicit workflow is given, AgentTag selects by workflow name/triggers, then by `default: true`, then by a single configured workflow. Unknown explicit workflows return a concise message with available options.
 
+Tool definitions live under `AGENTAG_WORKFLOWS_PATH/tools/*.yaml` so the operator can version them with workflows:
+
+```yaml
+name: git
+type: cli
+command: git
+arguments:
+    - status
+allowed_workflows:
+    - developer
+working_directory: codebase
+environment:
+    - GIT_SSH_COMMAND
+timeout_seconds: 120
+sensitivity: non_sensitive
+confirmation_policy: default
+sandbox: no_sandbox
+```
+
+`type` is `cli` or `mcp`. CLI tools define `command`; MCP tools define `server`. `allowed_workflows` limits where a tool is available, and selected runs only include tools both requested by the workflow and allowed by the tool. `sensitivity` is `non_sensitive`, `sensitive`, or `destructive`; non-sensitive tools do not require confirmation by default, while sensitive and destructive tools do. Use `confirmation_policy: always` to force confirmation for any tool. `sandbox: no_sandbox` records that the tool is permitted to run with full host access.
+
 ## Local Development
 
 Install dependencies:

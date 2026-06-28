@@ -2,17 +2,17 @@
 
 namespace App\Command;
 
-use App\AgentTag\Workflow\WorkflowCatalog;
+use App\AgentTag\Tool\ToolCatalog;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'agentag:tools:list', description: 'List tool names referenced by configured workflows.')]
+#[AsCommand(name: 'agentag:tools:list', description: 'List tools configured for AgentTag workflows.')]
 final class ListToolsCommand extends Command
 {
-    public function __construct(private readonly WorkflowCatalog $workflowCatalog)
+    public function __construct(private readonly ToolCatalog $toolCatalog)
     {
         parent::__construct();
     }
@@ -23,7 +23,7 @@ final class ListToolsCommand extends Command
         $io = new SymfonyStyle($input, $output);
 
         try {
-            $tools = $this->workflowCatalog->toolNames();
+            $tools = $this->toolCatalog->all();
         } catch (\Throwable $exception) {
             $io->error($exception->getMessage());
 
@@ -31,12 +31,27 @@ final class ListToolsCommand extends Command
         }
 
         if ([] === $tools) {
-            $io->note('No tools referenced by configured workflows.');
+            $io->note('No tools configured.');
 
             return Command::SUCCESS;
         }
 
-        $io->listing($tools);
+        $rows = [];
+        foreach ($tools as $tool) {
+            $rows[] = [
+                $tool->name(),
+                $tool->type(),
+                implode(', ', $tool->allowedWorkflows()),
+                $tool->workingDirectory(),
+                implode(', ', $tool->environmentWhitelist()),
+                $tool->timeoutSeconds(),
+                $tool->sensitivity(),
+                $tool->confirmationPolicy(),
+                $tool->sandbox(),
+            ];
+        }
+
+        $io->table(['Name', 'Type', 'Workflows', 'Cwd', 'Env', 'Timeout', 'Sensitivity', 'Confirm', 'Sandbox'], $rows);
 
         return Command::SUCCESS;
     }

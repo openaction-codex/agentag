@@ -4,6 +4,7 @@ namespace App\AgentTag\Session;
 
 use App\AgentTag\Chat\ChatSessionReference;
 use App\AgentTag\Security\SensitiveTextRedactor;
+use App\AgentTag\Tool\ToolCatalog;
 use App\AgentTag\Workflow\WorkflowDefinition;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
@@ -15,6 +16,7 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         private EntityManagerInterface $entityManager,
         private SessionContextSnapshotBuilder $snapshotBuilder,
         private SensitiveTextRedactor $redactor,
+        private ToolCatalog $toolCatalog,
     ) {
     }
 
@@ -49,7 +51,13 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
             ['id' => 'DESC'],
             5,
         );
-        $contextSnapshot = $this->snapshotBuilder->build($session, $threadContext, $priorRuns, $workflow);
+        $contextSnapshot = $this->snapshotBuilder->build(
+            $session,
+            $threadContext,
+            $priorRuns,
+            $workflow,
+            $this->toolCatalog->forWorkflow($workflow),
+        );
 
         $run = new AgentRun(
             $session,

@@ -22,6 +22,7 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
     {
         self::bootKernel();
         $this->refreshDatabase();
+        $this->writeTestTool();
     }
 
     public function testItCreatesOneSessionAndAppendsRunsForTheSameThread(): void
@@ -31,7 +32,7 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
 
         $reference = new ChatSessionReference('mattermost', 'team-id', 'channel-id', 'root-id');
         $workflow = WorkflowDefinition::fromArray(
-            ['name' => 'developer', 'version' => 'v1'],
+            ['name' => 'developer', 'version' => 'v1', 'tools' => ['git']],
             '/tmp/developer.yaml',
             'abc123',
         );
@@ -69,6 +70,8 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         self::assertStringContainsString('Workflow: developer', (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('Workflow version: v1', (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('Workflow revision: abc123', (string) $runs[0]->contextSnapshot());
+        self::assertStringContainsString('Available tools:', (string) $runs[0]->contextSnapshot());
+        self::assertStringContainsString('git (cli, non_sensitive, confirmation=default, sandbox=no_sandbox)', (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('Thread messages:', (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('password=[REDACTED]', (string) $runs[0]->contextSnapshot());
         self::assertStringNotContainsString('hunter2', (string) $runs[0]->contextSnapshot());
@@ -77,5 +80,30 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         self::assertStringContainsString('first input token=[REDACTED]', (string) $runs[1]->contextSnapshot());
         self::assertStringContainsString('Bearer [REDACTED]', (string) $runs[1]->contextSnapshot());
         self::assertStringContainsString('Explicit global memories: none configured.', (string) $runs[1]->contextSnapshot());
+    }
+
+    private function writeTestTool(): void
+    {
+        $projectDirectory = static::getContainer()->getParameter('kernel.project_dir');
+        if (!is_string($projectDirectory)) {
+            throw new \LogicException('Kernel project directory must be available.');
+        }
+
+        $toolDirectory = $projectDirectory.'/var/test-workflows/tools';
+        if (!is_dir($toolDirectory)) {
+            mkdir($toolDirectory, 0777, true);
+        }
+
+        file_put_contents($toolDirectory.'/git.yaml', <<<'YAML'
+name: git
+type: cli
+command: git
+allowed_workflows:
+    - developer
+working_directory: codebase
+timeout_seconds: 120
+sensitivity: non_sensitive
+sandbox: no_sandbox
+YAML);
     }
 }
