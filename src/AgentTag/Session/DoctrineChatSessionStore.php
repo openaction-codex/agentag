@@ -9,6 +9,7 @@ use App\AgentTag\Workflow\WorkflowDefinition;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 
 final readonly class DoctrineChatSessionStore implements ChatSessionStore
 {
@@ -17,6 +18,7 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         private SessionContextSnapshotBuilder $snapshotBuilder,
         private SensitiveTextRedactor $redactor,
         private ToolCatalog $toolCatalog,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -26,7 +28,9 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         string $inputSummary,
         ChatThreadContext $threadContext,
         WorkflowDefinition $workflow,
-    ): void {
+        ?string $sourceEventId = null,
+        ?string $requesterId = null,
+    ): AgentRun {
         $now = new \DateTimeImmutable();
         $session = $this->entityManager->getRepository(ChatSession::class)->findOneBy([
             'sessionKey' => $reference->key(),
@@ -42,6 +46,13 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
                 $now,
             );
             $this->entityManager->persist($session);
+            $this->logger->info('Created chat session.', [
+                'session_key' => $reference->key(),
+                'platform' => $reference->platform(),
+                'team_id' => $reference->teamId(),
+                'channel_id' => $reference->channelId(),
+                'thread_id' => $reference->threadId(),
+            ]);
         }
 
         $session->touch($now);
@@ -69,8 +80,20 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
             $workflow->name(),
             $workflow->version(),
             $workflow->revision(),
+            null === $sourceEventId ? null : $this->redactor->redact($sourceEventId),
+            null === $requesterId ? null : $this->redactor->redact($requesterId),
         );
         $this->entityManager->persist($run);
         $this->entityManager->flush();
+
+        $this->logger->info('Recorded agent run.', [
+            'run_id' => $run->id(),
+            'session_key' => $reference->key(),
+            'workflow' => $workflow->name(),
+            'source_event_id' => $sourceEventId,
+            'requester_id' => $requesterId,
+        ]);
+
+        return $run;
     }
 }

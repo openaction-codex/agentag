@@ -21,6 +21,9 @@ class ApprovalRequest
     private ?int $id = null;
 
     public function __construct(
+        #[ORM\ManyToOne(targetEntity: AgentRun::class)]
+        #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+        private ?AgentRun $run,
         #[ORM\Column(length: 120)]
         private string $action,
         #[ORM\Column(length: 80)]
@@ -50,6 +53,11 @@ class ApprovalRequest
     public function id(): ?int
     {
         return $this->id;
+    }
+
+    public function run(): ?AgentRun
+    {
+        return $this->run;
     }
 
     public function action(): string

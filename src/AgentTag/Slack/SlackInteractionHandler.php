@@ -6,8 +6,11 @@ use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
 use App\AgentTag\Memory\GlobalMemoryCommandContext;
 use App\AgentTag\Memory\GlobalMemoryCommandHandler;
+use App\AgentTag\Run\RunEventRecorder;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Workflow\WorkflowSelector;
+use App\Entity\RunEvent;
+use Psr\Log\LoggerInterface;
 
 final readonly class SlackInteractionHandler
 {
@@ -20,11 +23,22 @@ final readonly class SlackInteractionHandler
         private SlackThreadContextProvider $threadContextProvider,
         private WorkflowSelector $workflowSelector,
         private ?GlobalMemoryCommandHandler $memoryCommandHandler = null,
+        private ?RunEventRecorder $runEventRecorder = null,
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
     public function handle(SlackInboundEvent $event): SlackInteractionResult
     {
+        $this->logger?->info('Received Slack event.', [
+            'event_id' => $event->eventId(),
+            'team_id' => $event->teamId(),
+            'channel_id' => $event->channelId(),
+            'event_ts' => $event->eventTs(),
+            'thread_ts' => $event->threadTs(),
+            'user_id' => $event->userId(),
+        ]);
+
         if (!$this->mentionDetector->isMentioned($event->text())) {
             return SlackInteractionResult::ignored();
         }
@@ -59,11 +73,13 @@ final readonly class SlackInteractionHandler
 
         $workflow = $selection->workflow();
         $session = $this->sessionMapper->map($event);
-        $this->sessionStore->recordRun(
+        $run = $this->sessionStore->recordRun(
             $session,
             sprintf('Slack event %s from user %s.', $event->eventId(), $event->userId()),
             $this->threadContextProvider->contextFor($event),
             $workflow,
+            $event->eventId(),
+            $event->userId(),
         );
 
         $message = sprintf(
@@ -74,6 +90,17 @@ final readonly class SlackInteractionHandler
 
         $this->notifier->showTyping($event);
         $this->notifier->postProgress($event, $message);
+        $this->runEventRecorder?->record($run, RunEvent::TYPE_PROGRESS_UPDATE, $message, [
+            'platform' => 'slack',
+            'event_id' => $event->eventId(),
+            'channel_id' => $event->channelId(),
+            'thread_id' => $session->threadId(),
+        ]);
+        $this->logger?->info('Posted Slack progress update.', [
+            'run_id' => $run->id(),
+            'event_id' => $event->eventId(),
+            'thread_id' => $session->threadId(),
+        ]);
 
         return SlackInteractionResult::handled($message);
     }

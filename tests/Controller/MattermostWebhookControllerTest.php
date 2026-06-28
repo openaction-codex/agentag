@@ -5,6 +5,7 @@ namespace App\Tests\Controller;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use App\Entity\GlobalMemory;
+use App\Entity\RunEvent;
 use App\Tests\RefreshDatabaseTrait;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -37,6 +38,11 @@ final class MattermostWebhookControllerTest extends WebTestCase
         self::assertStringContainsString('session `post-id`', (string) $client->getResponse()->getContent());
         self::assertSame(1, $this->entityCount(ChatSession::class));
         self::assertSame(1, $this->entityCount(AgentRun::class));
+        self::assertSame(1, $this->entityCount(RunEvent::class));
+
+        $run = $this->firstRun();
+        self::assertSame('post-id', $run->sourceEventId());
+        self::assertSame('user-id', $run->requesterId());
     }
 
     public function testItContinuesThreadRepliesUsingTheRootId(): void
@@ -142,5 +148,15 @@ YAML);
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
         return count($entityManager->getRepository($className)->findAll());
+    }
+
+    private function firstRun(): AgentRun
+    {
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $run = $entityManager->getRepository(AgentRun::class)->findOneBy([]);
+        self::assertInstanceOf(AgentRun::class, $run);
+
+        return $run;
     }
 }

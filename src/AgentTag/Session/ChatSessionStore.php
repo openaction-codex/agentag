@@ -4,6 +4,7 @@ namespace App\AgentTag\Session;
 
 use App\AgentTag\Chat\ChatSessionReference;
 use App\AgentTag\Workflow\WorkflowDefinition;
+use App\Entity\AgentRun;
 
 interface ChatSessionStore
 {
@@ -12,5 +13,7 @@ interface ChatSessionStore
         string $inputSummary,
         ChatThreadContext $threadContext,
         WorkflowDefinition $workflow,
-    ): void;
+        ?string $sourceEventId = null,
+        ?string $requesterId = null,
+    ): AgentRun;
 }

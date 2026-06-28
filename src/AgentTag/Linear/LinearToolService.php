@@ -10,6 +10,7 @@ use App\AgentTag\Workflow\WorkflowDefinition;
 use App\Entity\ApprovalRequest;
 use App\Entity\LinearWriteAudit;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 
 final readonly class LinearToolService
 {
@@ -30,15 +31,22 @@ final readonly class LinearToolService
         private ApprovalRequestService $approvalRequestService,
         private EntityManagerInterface $entityManager,
         private SensitiveTextRedactor $redactor,
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
     public function readIssue(WorkflowDefinition $workflow, string $issueIdentifier): LinearToolInstruction
     {
         $issueIdentifier = $this->requiredString($issueIdentifier, 'issue identifier');
+        $tool = $this->linearToolFor($workflow);
+        $this->logger?->info('Prepared Linear issue read.', [
+            'workflow' => $workflow->name(),
+            'tool' => $tool->name(),
+            'issue_identifier' => $issueIdentifier,
+        ]);
 
         return new LinearToolInstruction(
-            $this->linearToolFor($workflow),
+            $tool,
             LinearOperationPolicy::READ_ISSUE,
             $issueIdentifier,
             ['issue_identifier' => $issueIdentifier],
@@ -72,6 +80,15 @@ final readonly class LinearToolService
             $requesterId,
             $this->expectedEffect($operation, $targetIssueIdentifier, $sourceMessageId),
         );
+        $this->logger?->info('Prepared Linear write.', [
+            'workflow' => $workflow->name(),
+            'tool' => $tool->name(),
+            'operation' => $operation,
+            'target_issue_identifier' => $targetIssueIdentifier,
+            'source_message_id' => $sourceMessageId,
+            'requester_id' => $requesterId,
+            'confirmation_required' => $approvalRequest instanceof ApprovalRequest,
+        ]);
 
         return new LinearToolInstruction(
             $tool,
@@ -108,6 +125,12 @@ final readonly class LinearToolService
         );
         $this->entityManager->persist($audit);
         $this->entityManager->flush();
+        $this->logger?->info('Audited successful Linear write.', [
+            'audit_id' => $audit->id(),
+            'workflow' => $workflow->name(),
+            'operation' => $operation,
+            'resulting_issue_identifiers' => $resultingIssueIdentifiers,
+        ]);
 
         return $audit;
     }
@@ -134,6 +157,12 @@ final readonly class LinearToolService
         );
         $this->entityManager->persist($audit);
         $this->entityManager->flush();
+        $this->logger?->warning('Audited failed Linear write.', [
+            'audit_id' => $audit->id(),
+            'workflow' => $workflow->name(),
+            'operation' => $operation,
+            'target_issue_identifier' => $targetIssueIdentifier,
+        ]);
 
         return $audit;
     }

@@ -2,10 +2,13 @@
 
 namespace App\AgentTag\Runner;
 
+use App\AgentTag\Run\RunEventRecorder;
 use App\AgentTag\Security\SensitiveTextRedactor;
 use App\AgentTag\Workspace\WorkspaceLayout;
 use App\Entity\AgentRun;
+use App\Entity\RunEvent;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 
 final readonly class AgentRunOrchestrator
 {
@@ -14,6 +17,8 @@ final readonly class AgentRunOrchestrator
         private WorkspaceLayout $workspaceLayout,
         private SensitiveTextRedactor $redactor,
         private EntityManagerInterface $entityManager,
+        private ?RunEventRecorder $runEventRecorder = null,
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -31,6 +36,20 @@ final readonly class AgentRunOrchestrator
         if (!is_dir($artifactsDirectory)) {
             mkdir($artifactsDirectory, 0777, true);
         }
+
+        $this->runEventRecorder?->record($run, RunEvent::TYPE_WORKSPACE_PREPARED, 'Prepared run workspace.', [
+            'working_directory' => $workingDirectory,
+            'artifacts_directory' => $artifactsDirectory,
+        ]);
+        $this->runEventRecorder?->record($run, RunEvent::TYPE_RUNNER_STARTED, 'Started agent runner.', [
+            'runner_mode' => $runnerMode,
+            'timeout_seconds' => $timeoutSeconds,
+        ]);
+        $this->logger?->info('Starting agent runner.', [
+            'run_id' => $run->id(),
+            'working_directory' => $workingDirectory,
+            'runner_mode' => $runnerMode,
+        ]);
 
         $result = $this->runner->run(new AgentRunnerInput(
             $prompt,
@@ -51,6 +70,27 @@ final readonly class AgentRunOrchestrator
             $result->tokenUsage(),
         );
         $this->entityManager->flush();
+
+        $this->runEventRecorder?->record($run, RunEvent::TYPE_RUNNER_FINISHED, $result->successful() ? 'Agent runner completed.' : 'Agent runner failed.', [
+            'status' => $run->status(),
+            'exit_code' => $result->exitCode(),
+            'workspace_path' => $workingDirectory,
+        ]);
+        if (null !== $result->tokenUsage()) {
+            $this->runEventRecorder?->record($run, RunEvent::TYPE_TOKEN_USAGE, 'Recorded token usage.', [
+                'input_tokens' => $result->tokenUsage()->inputTokens(),
+                'output_tokens' => $result->tokenUsage()->outputTokens(),
+                'total_tokens' => $result->tokenUsage()->totalTokens(),
+            ]);
+        }
+        $this->logger?->info('Finished agent runner.', [
+            'run_id' => $run->id(),
+            'status' => $run->status(),
+            'exit_code' => $run->exitCode(),
+            'input_tokens' => $run->inputTokens(),
+            'output_tokens' => $run->outputTokens(),
+            'total_tokens' => $run->totalTokens(),
+        ]);
 
         return $result;
     }

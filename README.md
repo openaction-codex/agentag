@@ -237,6 +237,11 @@ bin/console agentag:config:validate
 bin/console agentag:workflows:list
 bin/console agentag:repositories:list
 bin/console agentag:tools:list
+bin/console agentag:runs:failed
+bin/console agentag:memories:list
+bin/console agentag:memories:delete <id>
+bin/console agentag:workspace:inspect
+bin/console agentag:workspace:cleanup --older-than-days=7
 ```
 
 ## Runner Model
@@ -251,6 +256,8 @@ AgentTag runs agent work through `AgentRunnerInterface`. The default implementat
 ```
 
 The orchestrator creates the isolated run workspace under `AGENTAG_WORKSPACE_PATH/runs/<run-id>` and artifacts under `AGENTAG_WORKSPACE_PATH/artifacts/<run-id>`. Runner output, redacted logs, exit code, workspace path, artifacts, and token usage when exposed by the runner are stored on the `agent_run` record. If token usage is unavailable, AgentTag leaves token fields empty rather than guessing.
+
+Operator inspection data is stored in PostgreSQL. Runs keep source chat event and requester IDs, workflow metadata, token usage, workspace path, artifacts, repository clone paths when available, and sanitized summaries. Progress updates and runner lifecycle events are stored as run events. Confirmation requests can be linked to the run that created them. Session token totals are computed from their runs for stats. Workspace cleanup only removes old isolated workspace/artifact directories when `--force` is used; it never deletes run or session history in v1.
 
 ## VPS Setup
 

@@ -4,7 +4,9 @@ namespace App\Tests\AgentTag\Approval;
 
 use App\AgentTag\Approval\ActionSensitivity;
 use App\AgentTag\Approval\ApprovalRequestService;
+use App\Entity\AgentRun;
 use App\Entity\ApprovalRequest;
+use App\Entity\ChatSession;
 use App\Tests\RefreshDatabaseTrait;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
@@ -55,6 +57,24 @@ final class ApprovalRequestServiceTest extends KernelTestCase
         self::assertNotNull($request->decidedAt());
     }
 
+    public function testItCanLinkRequestsToTheCreatingRun(): void
+    {
+        $run = $this->persistRun();
+
+        $request = $this->service()->requestIfRequired(
+            ActionSensitivity::SENSITIVE,
+            'push_main',
+            'github',
+            'developer',
+            'user-1',
+            'Push changes to main.',
+            $run,
+        );
+
+        self::assertInstanceOf(ApprovalRequest::class, $request);
+        self::assertSame($run, $request->run());
+    }
+
     public function testItCancelsAndExpiresWithoutExecuting(): void
     {
         $request = $this->sensitiveRequest('deploy');
@@ -103,5 +123,16 @@ final class ApprovalRequestServiceTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
         return $entityManager;
+    }
+
+    private function persistRun(): AgentRun
+    {
+        $session = new ChatSession('mattermost:team:channel:thread', 'mattermost', 'team', 'channel', 'thread', new \DateTimeImmutable());
+        $run = new AgentRun($session, 'accepted', new \DateTimeImmutable());
+        $this->entityManager()->persist($session);
+        $this->entityManager()->persist($run);
+        $this->entityManager()->flush();
+
+        return $run;
     }
 }

@@ -17,6 +17,8 @@ use App\AgentTag\Session\ChatThreadMessage;
 use App\AgentTag\Workflow\WorkflowDefinition;
 use App\AgentTag\Workflow\WorkflowSelection;
 use App\AgentTag\Workflow\WorkflowSelector;
+use App\Entity\AgentRun;
+use App\Entity\ChatSession;
 use PHPUnit\Framework\TestCase;
 
 final class MattermostInteractionHandlerTest extends TestCase
@@ -44,6 +46,8 @@ final class MattermostInteractionHandlerTest extends TestCase
         self::assertSame(['Accepted workflow `developer`. I will continue this Mattermost thread as session `post`.'], $notifier->progressMessages);
         self::assertSame(['mattermost:team:channel:post'], $sessionStore->sessionKeys);
         self::assertSame(['developer'], $sessionStore->workflowNames);
+        self::assertSame(['post'], $sessionStore->sourceEventIds);
+        self::assertSame(['user'], $sessionStore->requesterIds);
         self::assertSame([['root text', '@Codex help']], $sessionStore->threadMessages);
     }
 
@@ -124,6 +128,16 @@ final class TraceableChatSessionStore implements ChatSessionStore
     public array $workflowNames = [];
 
     /**
+     * @var list<string|null>
+     */
+    public array $sourceEventIds = [];
+
+    /**
+     * @var list<string|null>
+     */
+    public array $requesterIds = [];
+
+    /**
      * @var list<list<string>>
      */
     public array $threadMessages = [];
@@ -134,12 +148,22 @@ final class TraceableChatSessionStore implements ChatSessionStore
         string $inputSummary,
         ChatThreadContext $threadContext,
         WorkflowDefinition $workflow,
-    ): void {
+        ?string $sourceEventId = null,
+        ?string $requesterId = null,
+    ): AgentRun {
         $this->sessionKeys[] = $reference->key();
         $this->workflowNames[] = $workflow->name();
+        $this->sourceEventIds[] = $sourceEventId;
+        $this->requesterIds[] = $requesterId;
         $this->threadMessages[] = array_map(
             static fn (ChatThreadMessage $message): string => $message->text(),
             $threadContext->messages(),
+        );
+
+        return new AgentRun(
+            new ChatSession($reference->key(), $reference->platform(), $reference->teamId(), $reference->channelId(), $reference->threadId(), new \DateTimeImmutable()),
+            'accepted',
+            new \DateTimeImmutable(),
         );
     }
 }

@@ -6,8 +6,11 @@ use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
 use App\AgentTag\Memory\GlobalMemoryCommandContext;
 use App\AgentTag\Memory\GlobalMemoryCommandHandler;
+use App\AgentTag\Run\RunEventRecorder;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Workflow\WorkflowSelector;
+use App\Entity\RunEvent;
+use Psr\Log\LoggerInterface;
 
 final readonly class MattermostInteractionHandler
 {
@@ -20,11 +23,22 @@ final readonly class MattermostInteractionHandler
         private MattermostThreadContextProvider $threadContextProvider,
         private WorkflowSelector $workflowSelector,
         private ?GlobalMemoryCommandHandler $memoryCommandHandler = null,
+        private ?RunEventRecorder $runEventRecorder = null,
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
     public function handle(MattermostInboundEvent $event): MattermostInteractionResult
     {
+        $this->logger?->info('Received Mattermost event.', [
+            'event_id' => $event->eventId(),
+            'team_id' => $event->teamId(),
+            'channel_id' => $event->channelId(),
+            'post_id' => $event->postId(),
+            'root_id' => $event->rootId(),
+            'user_id' => $event->userId(),
+        ]);
+
         if (!$this->mentionDetector->isMentioned($event->text())) {
             return MattermostInteractionResult::ignored();
         }
@@ -59,11 +73,13 @@ final readonly class MattermostInteractionHandler
 
         $workflow = $selection->workflow();
         $session = $this->sessionMapper->map($event);
-        $this->sessionStore->recordRun(
+        $run = $this->sessionStore->recordRun(
             $session,
             sprintf('Mattermost message %s from user %s.', $event->eventId(), $event->userId()),
             $this->threadContextProvider->contextFor($event),
             $workflow,
+            $event->eventId(),
+            $event->userId(),
         );
 
         $message = sprintf(
@@ -74,6 +90,17 @@ final readonly class MattermostInteractionHandler
 
         $this->notifier->showTyping($event);
         $this->notifier->postProgress($event, $message);
+        $this->runEventRecorder?->record($run, RunEvent::TYPE_PROGRESS_UPDATE, $message, [
+            'platform' => 'mattermost',
+            'event_id' => $event->eventId(),
+            'channel_id' => $event->channelId(),
+            'thread_id' => $session->threadId(),
+        ]);
+        $this->logger?->info('Posted Mattermost progress update.', [
+            'run_id' => $run->id(),
+            'event_id' => $event->eventId(),
+            'thread_id' => $session->threadId(),
+        ]);
 
         return MattermostInteractionResult::handled($message);
     }

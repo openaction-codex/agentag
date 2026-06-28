@@ -5,12 +5,14 @@ namespace App\AgentTag\Codebase;
 use App\AgentTag\Configuration\ConfiguredRepository;
 use App\AgentTag\Runner\ProcessFactory;
 use App\AgentTag\Workspace\WorkspaceLayout;
+use Psr\Log\LoggerInterface;
 
 final readonly class GitRepositoryCloner
 {
     public function __construct(
         private ProcessFactory $processFactory,
         private WorkspaceLayout $workspaceLayout,
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -23,6 +25,12 @@ final readonly class GitRepositoryCloner
             mkdir($runPath.'/codebase', 0777, true);
         }
 
+        $this->logger?->info('Cloning repository for run.', [
+            'repository' => $repository->identifier(),
+            'run_identifier' => $runIdentifier,
+            'target_path' => $targetPath,
+        ]);
+
         $process = $this->processFactory->create(
             $this->cloneCommand($repository, $targetPath),
             $runPath,
@@ -33,8 +41,19 @@ final readonly class GitRepositoryCloner
         $process->run();
 
         if (0 !== $process->exitCode()) {
+            $this->logger?->error('Repository clone failed.', [
+                'repository' => $repository->identifier(),
+                'run_identifier' => $runIdentifier,
+                'exit_code' => $process->exitCode(),
+            ]);
             throw new \RuntimeException(sprintf('Repository `%s` could not be cloned: %s', $repository->identifier(), trim($process->errorOutput()) ?: trim($process->output())));
         }
+
+        $this->logger?->info('Repository clone completed.', [
+            'repository' => $repository->identifier(),
+            'run_identifier' => $runIdentifier,
+            'target_path' => $targetPath,
+        ]);
 
         return new RepositoryClone($repository, $targetPath);
     }

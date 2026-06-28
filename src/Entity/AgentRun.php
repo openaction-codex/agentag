@@ -2,6 +2,8 @@
 
 namespace App\Entity;
 
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity]
@@ -14,7 +16,14 @@ class AgentRun
     private ?int $id = null;
 
     /**
-     * @param list<string> $artifacts
+     * @var Collection<int, RunEvent>
+     */
+    #[ORM\OneToMany(targetEntity: RunEvent::class, mappedBy: 'run')]
+    private Collection $events;
+
+    /**
+     * @param list<string>          $artifacts
+     * @param array<string, string> $repositoryClones
      */
     public function __construct(
         #[ORM\ManyToOne(targetEntity: ChatSession::class, inversedBy: 'runs')]
@@ -36,6 +45,10 @@ class AgentRun
         private ?string $workflowVersion = null,
         #[ORM\Column(length: 120, nullable: true)]
         private ?string $workflowRevision = null,
+        #[ORM\Column(length: 160, nullable: true)]
+        private ?string $sourceEventId = null,
+        #[ORM\Column(length: 120, nullable: true)]
+        private ?string $requesterId = null,
         #[ORM\Column(type: 'text', nullable: true)]
         private ?string $workspacePath = null,
         /**
@@ -43,6 +56,11 @@ class AgentRun
          */
         #[ORM\Column(type: 'json')]
         private array $artifacts = [],
+        /**
+         * @var array<string, string>
+         */
+        #[ORM\Column(type: 'json')]
+        private array $repositoryClones = [],
         #[ORM\Column(type: 'text', nullable: true)]
         private ?string $logSummary = null,
         #[ORM\Column(nullable: true)]
@@ -54,6 +72,7 @@ class AgentRun
         #[ORM\Column(nullable: true)]
         private ?int $totalTokens = null,
     ) {
+        $this->events = new ArrayCollection();
     }
 
     public function id(): ?int
@@ -106,6 +125,16 @@ class AgentRun
         return $this->workflowRevision;
     }
 
+    public function sourceEventId(): ?string
+    {
+        return $this->sourceEventId;
+    }
+
+    public function requesterId(): ?string
+    {
+        return $this->requesterId;
+    }
+
     public function workspacePath(): ?string
     {
         return $this->workspacePath;
@@ -117,6 +146,22 @@ class AgentRun
     public function artifacts(): array
     {
         return $this->artifacts;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function repositoryClones(): array
+    {
+        return $this->repositoryClones;
+    }
+
+    /**
+     * @return Collection<int, RunEvent>
+     */
+    public function events(): Collection
+    {
+        return $this->events;
     }
 
     public function logSummary(): ?string
@@ -165,5 +210,13 @@ class AgentRun
         $this->inputTokens = $tokenUsage?->inputTokens();
         $this->outputTokens = $tokenUsage?->outputTokens();
         $this->totalTokens = $tokenUsage?->totalTokens();
+    }
+
+    /**
+     * @param array<string, string> $repositoryClones
+     */
+    public function recordRepositoryClones(array $repositoryClones): void
+    {
+        $this->repositoryClones = $repositoryClones;
     }
 }

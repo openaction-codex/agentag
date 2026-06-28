@@ -2,6 +2,7 @@
 
 namespace App\Tests\AgentTag\Runner;
 
+use App\AgentTag\Run\RunEventRecorder;
 use App\AgentTag\Runner\AgentArtifact;
 use App\AgentTag\Runner\AgentRunnerInput;
 use App\AgentTag\Runner\AgentRunnerInterface;
@@ -12,8 +13,10 @@ use App\AgentTag\Security\SensitiveTextRedactor;
 use App\AgentTag\Workspace\WorkspaceLayout;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
+use App\Entity\RunEvent;
 use App\Tests\RefreshDatabaseTrait;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\NullLogger;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 
 final class AgentRunOrchestratorTest extends KernelTestCase
@@ -53,6 +56,7 @@ final class AgentRunOrchestratorTest extends KernelTestCase
             new WorkspaceLayout($this->workspaceDirectory, $this->workspaceDirectory.'/workflows'),
             new SensitiveTextRedactor(),
             $entityManager,
+            new RunEventRecorder($entityManager, new SensitiveTextRedactor(), new NullLogger()),
         );
 
         $orchestrator->run($run, 'run-123', 'Prompt with token=secret', 'codex-full-access', 120, ['A' => 'B']);
@@ -66,6 +70,21 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         self::assertSame(10, $run->inputTokens());
         self::assertSame(5, $run->outputTokens());
         self::assertSame(15, $run->totalTokens());
+        $events = $entityManager->getRepository(RunEvent::class)->findBy(['run' => $run], ['id' => 'ASC']);
+        self::assertCount(4, $events);
+        self::assertSame(RunEvent::TYPE_WORKSPACE_PREPARED, $events[0]->type());
+        self::assertSame(RunEvent::TYPE_RUNNER_STARTED, $events[1]->type());
+        self::assertSame(RunEvent::TYPE_RUNNER_FINISHED, $events[2]->type());
+        self::assertSame(RunEvent::TYPE_TOKEN_USAGE, $events[3]->type());
+        self::assertSame(15, $events[3]->metadata()['total_tokens']);
+        $sessionId = $session->id();
+        self::assertNotNull($sessionId);
+        $entityManager->clear();
+        $storedSession = $entityManager->getRepository(ChatSession::class)->find($sessionId);
+        self::assertInstanceOf(ChatSession::class, $storedSession);
+        self::assertSame(10, $storedSession->inputTokens());
+        self::assertSame(5, $storedSession->outputTokens());
+        self::assertSame(15, $storedSession->totalTokens());
         self::assertNotNull($fakeRunner->input);
         self::assertSame($this->workspaceDirectory.'/runs/run-123', $fakeRunner->input->workingDirectory());
         self::assertSame($this->workspaceDirectory.'/artifacts/run-123', $fakeRunner->input->artifactsDirectory());

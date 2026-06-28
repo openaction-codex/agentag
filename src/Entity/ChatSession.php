@@ -93,4 +93,32 @@ class ChatSession
     {
         $this->lastActivityAt = $now;
     }
+
+    public function inputTokens(): int
+    {
+        return $this->sumRunTokens(static fn (AgentRun $run): ?int => $run->inputTokens());
+    }
+
+    public function outputTokens(): int
+    {
+        return $this->sumRunTokens(static fn (AgentRun $run): ?int => $run->outputTokens());
+    }
+
+    public function totalTokens(): int
+    {
+        return $this->sumRunTokens(static fn (AgentRun $run): ?int => $run->totalTokens());
+    }
+
+    /**
+     * @param callable(AgentRun): ?int $tokenAccessor
+     */
+    private function sumRunTokens(callable $tokenAccessor): int
+    {
+        $total = 0;
+        foreach ($this->runs as $run) {
+            $total += $tokenAccessor($run) ?? 0;
+        }
+
+        return $total;
+    }
 }

@@ -19,6 +19,19 @@ final readonly class CodebaseContext
         return $this->clones;
     }
 
+    /**
+     * @return array<string, string>
+     */
+    public function cloneMap(): array
+    {
+        $map = [];
+        foreach ($this->clones as $clone) {
+            $map[$clone->repository()->identifier()] = $clone->path();
+        }
+
+        return $map;
+    }
+
     public function promptSection(): string
     {
         if ([] === $this->clones) {

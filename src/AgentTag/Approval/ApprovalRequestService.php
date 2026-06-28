@@ -2,6 +2,7 @@
 
 namespace App\AgentTag\Approval;
 
+use App\Entity\AgentRun;
 use App\Entity\ApprovalRequest;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -18,12 +19,13 @@ final readonly class ApprovalRequestService
         string $workflowName,
         string $requesterId,
         string $expectedEffect,
+        ?AgentRun $run = null,
     ): ?ApprovalRequest {
         if (ActionSensitivity::NON_SENSITIVE === $sensitivity) {
             return null;
         }
 
-        $request = new ApprovalRequest($action, $targetSystem, $workflowName, $requesterId, $expectedEffect, $sensitivity, new \DateTimeImmutable());
+        $request = new ApprovalRequest($run, $action, $targetSystem, $workflowName, $requesterId, $expectedEffect, $sensitivity, new \DateTimeImmutable());
         $this->entityManager->persist($request);
         $this->entityManager->flush();
 
