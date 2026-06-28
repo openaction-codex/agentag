@@ -10,7 +10,7 @@ This repository is being implemented user story by user story from Linear `OPE-1
 - PostgreSQL configuration through `DATABASE_URL`.
 - Optional Redis-compatible Messenger/cache wiring through Symfony configuration when needed later.
 - A configurable AgentTag workspace layout.
-- A `/health` endpoint.
+- `/health` and `/ready` endpoints for liveness/readiness checks.
 - Mattermost and Slack webhook entrypoints with thread/session mapping.
 - PostgreSQL-backed chat sessions and agent run records with redacted context snapshots.
 - Explicit-only global memories with chat commands to remember, list, and delete entries by ID.
@@ -21,10 +21,14 @@ This repository is being implemented user story by user story from Linear `OPE-1
 
 - PHP 8.4.
 - Composer.
+- Symfony runtime support: either Symfony CLI, PHP-FPM, or another process manager able to serve the Symfony front controller.
 - PostgreSQL 16 or compatible.
+- Optional Redis-compatible service if you later switch Messenger/cache transports to Redis.
 - Git.
+- Local SSH keys configured for every repository in `AGENTAG_REPOSITORY_URLS`.
 - Codex CLI installed and configured on the host before agent execution features are enabled.
 - Mattermost bot credentials before Mattermost webhooks are enabled.
+- Optional Slack credentials and optional Linear MCP/CLI tooling when those integrations are enabled in workflows.
 
 For local development, Docker Compose can start PostgreSQL:
 
@@ -215,6 +219,7 @@ Check the app:
 
 ```bash
 curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/ready
 ```
 
 Run the quality checks:
@@ -246,6 +251,8 @@ bin/console agentag:workspace:inspect
 bin/console agentag:workspace:cleanup --older-than-days=7
 ```
 
+`/health` is a liveness check that does not touch dependencies. `/ready` verifies the application can reach the database and returns HTTP 503 if it cannot, which is suitable for a reverse proxy or container readiness check.
+
 ## Runner Model
 
 AgentTag runs agent work through `AgentRunnerInterface`. The default implementation is `CodexCliRunner`, which invokes the local `codex exec` binary with:
@@ -265,17 +272,41 @@ Operator inspection data is stored in PostgreSQL. Runs keep source chat event an
 
 A practical VPS deployment is:
 
-1. Install PHP 8.4, Composer, PostgreSQL, Git, and the Symfony CLI or your preferred PHP process manager.
+1. Install PHP 8.4, Composer, PostgreSQL, Git, OpenSSH client tools, and either Symfony CLI, PHP-FPM, or another process manager for Symfony.
 2. Clone this repository to a release directory such as `/srv/agentag/app`.
 3. Create `/srv/agentag/workspace` and clone your workflows repository to `/srv/agentag/workspace/workflows`.
-4. Configure `.env.local` or real environment variables with `APP_SECRET`, `DATABASE_URL`, `AGENTAG_*`, Mattermost credentials, and later Linear/GitHub tokens as needed.
-5. Run `composer install --no-dev --optimize-autoloader`.
-6. Run Doctrine migrations: `bin/console doctrine:migrations:migrate --no-interaction`.
-7. Run the web process behind nginx/Caddy/Apache or Symfony CLI.
-8. Run Symfony Messenger workers if asynchronous jobs are configured in later stories.
-9. Protect logs and `.env.local` with normal server file permissions.
+4. Configure SSH deploy keys or an SSH agent for every repository listed in `AGENTAG_REPOSITORY_URLS`; AgentTag clones repositories with the local `git` CLI over SSH.
+5. Configure `.env.local` or real environment variables with `APP_SECRET`, `DATABASE_URL`, `AGENTAG_*`, Mattermost credentials, and optional Slack/Linear/GitHub tokens as needed. Do not commit secrets.
+6. Run `composer install --no-dev --optimize-autoloader`.
+7. Run Doctrine migrations: `bin/console doctrine:migrations:migrate --no-interaction`.
+8. Warm the prod cache if desired: `APP_ENV=prod APP_DEBUG=0 bin/console cache:clear`.
+9. Run the web process behind nginx, Caddy, Apache, PHP-FPM, or Symfony CLI. Configure the reverse proxy to hit `/health` for liveness and `/ready` for readiness.
+10. Run Symfony Messenger workers only if asynchronous jobs are configured later, for example `bin/console messenger:consume async --time-limit=3600`.
+11. Store logs in journald or normal rotated files, and protect logs plus `.env.local` with server file permissions.
 
-The read-only EasyAdmin panel will be added in a later story and protected by in-memory HTTP Basic credentials from `AGENTAG_ADMIN_USER` and `AGENTAG_ADMIN_PASSWORD`.
+Minimal systemd shape:
+
+```ini
+[Unit]
+Description=AgentTag web process
+After=network.target postgresql.service
+
+[Service]
+WorkingDirectory=/srv/agentag/app
+Environment=APP_ENV=prod
+Environment=APP_DEBUG=0
+EnvironmentFile=/srv/agentag/app/.env.local
+ExecStart=/usr/bin/symfony server:start --no-tls --port=8080
+Restart=always
+User=agentag
+
+[Install]
+WantedBy=multi-user.target
+```
+
+For deploys, pull or replace the app release, run `composer install --no-dev --optimize-autoloader`, run migrations, update the workflows checkout manually with `git -C /srv/agentag/workspace/workflows pull --ff-only`, and restart the web service. Use `agentag:workspace:cleanup` periodically in dry-run mode first, then with `--force` when you are comfortable deleting old isolated run/artifact directories.
+
+The `/admin` path is protected by in-memory HTTP Basic credentials from `AGENTAG_ADMIN_USER` and `AGENTAG_ADMIN_PASSWORD`. It is reserved for the read-only EasyAdmin inspection panel: sessions, runs, run events, approvals, memories, Linear audits, and related entities are for debugging and usage review only. The operating model intentionally avoids a write-capable admin UI in v1; use explicit chat commands or console commands for supported mutations such as deleting a memory by ID.
 
 ## Mattermost Usage Model
 
