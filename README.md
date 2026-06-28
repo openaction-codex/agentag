@@ -73,6 +73,16 @@ The intended workspace layout is:
 
 Repositories available to the agent are configured through `AGENTAG_REPOSITORY_URLS`. They are expected to be SSH clone URLs usable by the local `git` CLI. Configure SSH keys on the VPS or local machine before enabling codebase workflows.
 
+AgentTag derives stable repository identifiers from SSH URL paths. For example, `git@github.com:openaction-codex/agentag.git` becomes `openaction-codex-agentag`. Workflows can request repositories by identifier or `*`:
+
+```yaml
+name: developer
+repositories:
+    - openaction-codex-agentag
+```
+
+When a workflow requests repository context, AgentTag clones each permitted repository with the local `git` CLI into `AGENTAG_WORKSPACE_PATH/runs/<run-id>/codebase/<repository-id>`. Those per-run clones are the only active working copies. Optional mirrors under `AGENTAG_WORKSPACE_PATH/cache/repositories/<repository-id>.git` may be used through `git clone --reference-if-able`, but cache mirrors are never used as the agent's working copy. The generated Codex prompt section tells the runner to inspect clones read-only and cite relevant file paths when answering.
+
 Workflow files are loaded from `AGENTAG_WORKFLOWS_PATH` as local `.yaml` or `.yml` files. The workflows directory is expected to be a manually cloned, versioned repository managed outside AgentTag. Example:
 
 ```yaml
