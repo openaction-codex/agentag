@@ -152,6 +152,10 @@ output_template: |
     ## Rollout
 ```
 
+Implementation runs use the configured repository context and Codex runner. The prompt sent to Codex includes the technical spec, relevant session context, the isolated repository clone path, the branch to use/create, and configured check commands. Summaries are expected to cover changed files, test results, artifacts, token usage when available, remaining risks, and next review steps.
+
+Opening a new pull request is non-sensitive by default. Pushing a normal work branch is also non-sensitive unless your workflow policy says otherwise. Pushing to main/protected branches, force-pushing, deleting data, overwriting data, and deployments require confirmation.
+
 Tool definitions live under `AGENTAG_WORKFLOWS_PATH/tools/*.yaml` so the operator can version them with workflows:
 
 ```yaml
