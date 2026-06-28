@@ -13,6 +13,9 @@ class AgentRun
     #[ORM\Column]
     private ?int $id = null;
 
+    /**
+     * @param list<string> $artifacts
+     */
     public function __construct(
         #[ORM\ManyToOne(targetEntity: ChatSession::class, inversedBy: 'runs')]
         #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
@@ -33,6 +36,17 @@ class AgentRun
         private ?string $workflowVersion = null,
         #[ORM\Column(length: 120, nullable: true)]
         private ?string $workflowRevision = null,
+        #[ORM\Column(type: 'text', nullable: true)]
+        private ?string $workspacePath = null,
+        /**
+         * @var list<string>
+         */
+        #[ORM\Column(type: 'json')]
+        private array $artifacts = [],
+        #[ORM\Column(type: 'text', nullable: true)]
+        private ?string $logSummary = null,
+        #[ORM\Column(nullable: true)]
+        private ?int $exitCode = null,
         #[ORM\Column(nullable: true)]
         private ?int $inputTokens = null,
         #[ORM\Column(nullable: true)]
@@ -92,6 +106,29 @@ class AgentRun
         return $this->workflowRevision;
     }
 
+    public function workspacePath(): ?string
+    {
+        return $this->workspacePath;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function artifacts(): array
+    {
+        return $this->artifacts;
+    }
+
+    public function logSummary(): ?string
+    {
+        return $this->logSummary;
+    }
+
+    public function exitCode(): ?int
+    {
+        return $this->exitCode;
+    }
+
     public function inputTokens(): ?int
     {
         return $this->inputTokens;
@@ -105,5 +142,28 @@ class AgentRun
     public function totalTokens(): ?int
     {
         return $this->totalTokens;
+    }
+
+    /**
+     * @param list<string> $artifacts
+     */
+    public function recordRunnerResult(
+        string $status,
+        string $outputSummary,
+        string $logSummary,
+        string $workspacePath,
+        array $artifacts,
+        int $exitCode,
+        ?\App\AgentTag\Runner\TokenUsage $tokenUsage,
+    ): void {
+        $this->status = $status;
+        $this->outputSummary = $outputSummary;
+        $this->logSummary = $logSummary;
+        $this->workspacePath = $workspacePath;
+        $this->artifacts = $artifacts;
+        $this->exitCode = $exitCode;
+        $this->inputTokens = $tokenUsage?->inputTokens();
+        $this->outputTokens = $tokenUsage?->outputTokens();
+        $this->totalTokens = $tokenUsage?->totalTokens();
     }
 }

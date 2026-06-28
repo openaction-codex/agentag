@@ -52,6 +52,12 @@ services:
     App\AgentTag\Workflow\WorkflowSelector:
         alias: App\AgentTag\Workflow\CatalogWorkflowSelector
 
+    App\AgentTag\Runner\ProcessFactory:
+        alias: App\AgentTag\Runner\SymfonyProcessFactory
+
+    App\AgentTag\Runner\AgentRunnerInterface:
+        alias: App\AgentTag\Runner\CodexCliRunner
+
     App\AgentTag\Session\SessionContextSnapshotBuilder:
         arguments:
             $maxCharacters: '%env(int:AGENTAG_CONTEXT_MAX_CHARS)%'

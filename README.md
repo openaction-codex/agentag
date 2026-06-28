@@ -163,6 +163,19 @@ bin/console agentag:repositories:list
 bin/console agentag:tools:list
 ```
 
+## Runner Model
+
+AgentTag runs agent work through `AgentRunnerInterface`. The default implementation is `CodexCliRunner`, which invokes the local `codex exec` binary with:
+
+```text
+--dangerously-bypass-approvals-and-sandbox
+--skip-git-repo-check
+--cd <isolated-run-workspace>
+--output-last-message <artifacts-dir>/codex-last-message.txt
+```
+
+The orchestrator creates the isolated run workspace under `AGENTAG_WORKSPACE_PATH/runs/<run-id>` and artifacts under `AGENTAG_WORKSPACE_PATH/artifacts/<run-id>`. Runner output, redacted logs, exit code, workspace path, artifacts, and token usage when exposed by the runner are stored on the `agent_run` record. If token usage is unavailable, AgentTag leaves token fields empty rather than guessing.
+
 ## VPS Setup
 
 A practical VPS deployment is:
