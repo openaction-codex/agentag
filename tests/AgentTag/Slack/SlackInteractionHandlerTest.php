@@ -14,6 +14,9 @@ use App\AgentTag\Slack\SlackInboundEvent;
 use App\AgentTag\Slack\SlackInteractionHandler;
 use App\AgentTag\Slack\SlackNotifier;
 use App\AgentTag\Slack\SlackSessionMapper;
+use App\AgentTag\Workflow\WorkflowDefinition;
+use App\AgentTag\Workflow\WorkflowSelection;
+use App\AgentTag\Workflow\WorkflowSelector;
 use PHPUnit\Framework\TestCase;
 
 final class SlackInteractionHandlerTest extends TestCase
@@ -29,6 +32,7 @@ final class SlackInteractionHandlerTest extends TestCase
             $notifier,
             $sessionStore,
             new CurrentSlackThreadContextProvider(),
+            new FixedWorkflowSelector(WorkflowSelection::selected($this->workflow())),
         );
 
         $firstResult = $handler->handle($this->event());
@@ -37,9 +41,15 @@ final class SlackInteractionHandlerTest extends TestCase
         self::assertTrue($firstResult->isHandled());
         self::assertFalse($secondResult->isHandled());
         self::assertSame(1, $notifier->typingCount);
-        self::assertSame(['Accepted. I will continue this Slack thread as session `1700000000.000000`.'], $notifier->progressMessages);
+        self::assertSame(['Accepted workflow `developer`. I will continue this Slack thread as session `1700000000.000000`.'], $notifier->progressMessages);
         self::assertSame(['slack:T123:C123:1700000000.000000'], $sessionStore->sessionKeys);
+        self::assertSame(['developer'], $sessionStore->workflowNames);
         self::assertSame([['@Codex help']], $sessionStore->threadMessages);
+    }
+
+    private function workflow(): WorkflowDefinition
+    {
+        return WorkflowDefinition::fromArray(['name' => 'developer', 'version' => 'v1'], '/tmp/developer.yaml', 'abc123');
     }
 
     private function event(): SlackInboundEvent
@@ -65,18 +75,41 @@ final class TraceableChatSessionStore implements ChatSessionStore
     public array $sessionKeys = [];
 
     /**
+     * @var list<string>
+     */
+    public array $workflowNames = [];
+
+    /**
      * @var list<list<string>>
      */
     public array $threadMessages = [];
 
     #[\Override]
-    public function recordRun(ChatSessionReference $reference, string $inputSummary, ChatThreadContext $threadContext): void
-    {
+    public function recordRun(
+        ChatSessionReference $reference,
+        string $inputSummary,
+        ChatThreadContext $threadContext,
+        WorkflowDefinition $workflow,
+    ): void {
         $this->sessionKeys[] = $reference->key();
+        $this->workflowNames[] = $workflow->name();
         $this->threadMessages[] = array_map(
             static fn (ChatThreadMessage $message): string => $message->text(),
             $threadContext->messages(),
         );
+    }
+}
+
+final readonly class FixedWorkflowSelector implements WorkflowSelector
+{
+    public function __construct(private WorkflowSelection $selection)
+    {
+    }
+
+    #[\Override]
+    public function select(string $message): WorkflowSelection
+    {
+        return $this->selection;
     }
 }
 

@@ -45,6 +45,7 @@ final class SlackEventsControllerTest extends WebTestCase
         $client->jsonRequest('POST', '/integrations/slack/events', $this->payload(['text' => '@Codex help']));
 
         self::assertResponseIsSuccessful();
+        self::assertStringContainsString('Accepted workflow `developer`', (string) $client->getResponse()->getContent());
         self::assertStringContainsString('session `1700000000.000000`', (string) $client->getResponse()->getContent());
         self::assertSame(1, $this->entityCount(ChatSession::class));
         self::assertSame(1, $this->entityCount(AgentRun::class));
@@ -103,8 +104,33 @@ final class SlackEventsControllerTest extends WebTestCase
     {
         $client = static::createClient();
         $this->refreshDatabase();
+        $this->writeTestWorkflow();
 
         return $client;
+    }
+
+    private function writeTestWorkflow(): void
+    {
+        $projectDirectory = static::getContainer()->getParameter('kernel.project_dir');
+        if (!is_string($projectDirectory)) {
+            throw new \LogicException('Kernel project directory must be available.');
+        }
+
+        $workflowDirectory = $projectDirectory.'/var/test-workflows';
+        if (!is_dir($workflowDirectory)) {
+            mkdir($workflowDirectory, 0777, true);
+        }
+
+        file_put_contents($workflowDirectory.'/developer.yaml', <<<'YAML'
+name: developer
+version: v1
+default: true
+triggers:
+    - help
+    - continue
+tools:
+    - codex
+YAML);
     }
 
     /**

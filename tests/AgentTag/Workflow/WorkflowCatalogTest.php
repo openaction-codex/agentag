@@ -35,14 +35,23 @@ final class WorkflowCatalogTest extends TestCase
     {
         file_put_contents($this->workflowDirectory.'/product.yaml', <<<'YAML'
 name: product
+version: v2
 description: Draft product specs.
+default: true
 triggers:
     - spec
-tools:
+allowed_tools:
     - linear
     - git
 repositories:
     - openaction-codex-agentag
+instructions: |
+    Draft concise specs.
+output_template: |
+    ## Summary
+runner_mode: codex-full-access
+timeout_seconds: 900
+sensitivity_policy: confirm-sensitive
 YAML);
 
         $catalog = new WorkflowCatalog($this->settings());
@@ -50,9 +59,17 @@ YAML);
 
         self::assertCount(1, $workflows);
         self::assertSame('product', $workflows[0]->name());
+        self::assertSame('v2', $workflows[0]->version());
+        self::assertTrue($workflows[0]->default());
         self::assertSame(['spec'], $workflows[0]->triggers());
         self::assertSame(['linear', 'git'], $workflows[0]->tools());
         self::assertSame(['openaction-codex-agentag'], $workflows[0]->repositories());
+        self::assertSame('Draft concise specs.', $workflows[0]->instructions());
+        self::assertSame('## Summary', $workflows[0]->outputTemplate());
+        self::assertSame('codex-full-access', $workflows[0]->runnerMode());
+        self::assertSame(900, $workflows[0]->timeoutSeconds());
+        self::assertSame('confirm-sensitive', $workflows[0]->sensitivityPolicy());
+        self::assertNull($workflows[0]->revision());
         self::assertSame(['git', 'linear'], $catalog->toolNames());
     }
 

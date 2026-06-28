@@ -5,6 +5,7 @@ namespace App\AgentTag\Mattermost;
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
 use App\AgentTag\Session\ChatSessionStore;
+use App\AgentTag\Workflow\WorkflowSelector;
 
 final readonly class MattermostInteractionHandler
 {
@@ -15,6 +16,7 @@ final readonly class MattermostInteractionHandler
         private MattermostNotifier $notifier,
         private ChatSessionStore $sessionStore,
         private MattermostThreadContextProvider $threadContextProvider,
+        private WorkflowSelector $workflowSelector,
     ) {
     }
 
@@ -28,15 +30,27 @@ final readonly class MattermostInteractionHandler
             return MattermostInteractionResult::duplicate();
         }
 
+        $selection = $this->workflowSelector->select($event->text());
+        if (!$selection->isSelected()) {
+            $message = $selection->message();
+            $this->notifier->showTyping($event);
+            $this->notifier->postProgress($event, $message);
+
+            return MattermostInteractionResult::handled($message);
+        }
+
+        $workflow = $selection->workflow();
         $session = $this->sessionMapper->map($event);
         $this->sessionStore->recordRun(
             $session,
             sprintf('Mattermost message %s from user %s.', $event->eventId(), $event->userId()),
             $this->threadContextProvider->contextFor($event),
+            $workflow,
         );
 
         $message = sprintf(
-            'Accepted. I will continue this Mattermost thread as session `%s`.',
+            'Accepted workflow `%s`. I will continue this Mattermost thread as session `%s`.',
+            $workflow->name(),
             $session->threadId(),
         );
 

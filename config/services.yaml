@@ -24,14 +24,14 @@ services:
     App\AgentTag\Configuration\AgentTagSettings:
         arguments:
             $tag: '%env(string:AGENTAG_TAG)%'
-            $workspacePath: '%env(string:AGENTAG_WORKSPACE_PATH)%'
-            $workflowsPath: '%env(string:AGENTAG_WORKFLOWS_PATH)%'
+            $workspacePath: '%env(resolve:AGENTAG_WORKSPACE_PATH)%'
+            $workflowsPath: '%env(resolve:AGENTAG_WORKFLOWS_PATH)%'
             $repositoryUrlsCsv: '%env(string:AGENTAG_REPOSITORY_URLS)%'
 
     App\AgentTag\Workspace\WorkspaceLayout:
         arguments:
-            $workspacePath: '%env(string:AGENTAG_WORKSPACE_PATH)%'
-            $workflowsPath: '%env(string:AGENTAG_WORKFLOWS_PATH)%'
+            $workspacePath: '%env(resolve:AGENTAG_WORKSPACE_PATH)%'
+            $workflowsPath: '%env(resolve:AGENTAG_WORKFLOWS_PATH)%'
 
     App\AgentTag\Mattermost\MattermostWebhookAuthenticator:
         arguments:
@@ -45,6 +45,12 @@ services:
 
     App\AgentTag\Session\ChatSessionStore:
         alias: App\AgentTag\Session\DoctrineChatSessionStore
+
+    App\AgentTag\Workflow\WorkflowRevisionResolver:
+        alias: App\AgentTag\Workflow\GitWorkflowRevisionResolver
+
+    App\AgentTag\Workflow\WorkflowSelector:
+        alias: App\AgentTag\Workflow\CatalogWorkflowSelector
 
     App\AgentTag\Session\SessionContextSnapshotBuilder:
         arguments:

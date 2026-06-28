@@ -27,6 +27,12 @@ class AgentRun
         private ?string $outputSummary = null,
         #[ORM\Column(type: 'text', nullable: true)]
         private ?string $contextSnapshot = null,
+        #[ORM\Column(length: 120, nullable: true)]
+        private ?string $workflowName = null,
+        #[ORM\Column(length: 120, nullable: true)]
+        private ?string $workflowVersion = null,
+        #[ORM\Column(length: 120, nullable: true)]
+        private ?string $workflowRevision = null,
         #[ORM\Column(nullable: true)]
         private ?int $inputTokens = null,
         #[ORM\Column(nullable: true)]
@@ -69,6 +75,21 @@ class AgentRun
     public function outputSummary(): ?string
     {
         return $this->outputSummary;
+    }
+
+    public function workflowName(): ?string
+    {
+        return $this->workflowName;
+    }
+
+    public function workflowVersion(): ?string
+    {
+        return $this->workflowVersion;
+    }
+
+    public function workflowRevision(): ?string
+    {
+        return $this->workflowRevision;
     }
 
     public function inputTokens(): ?int

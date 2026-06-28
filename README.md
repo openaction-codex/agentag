@@ -73,6 +73,32 @@ The intended workspace layout is:
 
 Repositories available to the agent are configured through `AGENTAG_REPOSITORY_URLS`. They are expected to be SSH clone URLs usable by the local `git` CLI. Configure SSH keys on the VPS or local machine before enabling codebase workflows.
 
+Workflow files are loaded from `AGENTAG_WORKFLOWS_PATH` as local `.yaml` or `.yml` files. The workflows directory is expected to be a manually cloned, versioned repository managed outside AgentTag. Example:
+
+```yaml
+name: developer
+version: v1
+description: Work on implementation tasks.
+default: true
+triggers:
+    - implement
+    - fix
+tools:
+    - codex
+    - git
+repositories:
+    - openaction-codex-agentag
+instructions: |
+    Follow the repository review discipline.
+output_template: |
+    Summary, verification, next steps.
+runner_mode: codex-full-access
+timeout_seconds: 1800
+sensitivity_policy: confirm-sensitive
+```
+
+After the global tag, users can select workflows explicitly with `workflow:developer` or `/developer`. If no explicit workflow is given, AgentTag selects by workflow name/triggers, then by `default: true`, then by a single configured workflow. Unknown explicit workflows return a concise message with available options.
+
 ## Local Development
 
 Install dependencies:
@@ -141,6 +167,7 @@ The interaction model is:
 - Start a new root message/thread for a new topic.
 - Each substantial agent action inside the session creates its own isolated run workspace.
 - Each accepted mention creates an `agent_run` row linked to the thread `chat_session`.
+- The selected workflow name, workflow version, and workflow git revision are stored on the run when available.
 - The stored context snapshot includes bounded thread messages, prior run summaries, explicit-memory placeholders, and link/artifact placeholders.
 - Context snapshots and input summaries are redacted before storage.
 

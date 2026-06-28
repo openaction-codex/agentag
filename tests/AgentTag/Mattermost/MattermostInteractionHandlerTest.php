@@ -14,6 +14,9 @@ use App\AgentTag\Mattermost\MattermostThreadContextProvider;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Session\ChatThreadContext;
 use App\AgentTag\Session\ChatThreadMessage;
+use App\AgentTag\Workflow\WorkflowDefinition;
+use App\AgentTag\Workflow\WorkflowSelection;
+use App\AgentTag\Workflow\WorkflowSelector;
 use PHPUnit\Framework\TestCase;
 
 final class MattermostInteractionHandlerTest extends TestCase
@@ -29,6 +32,7 @@ final class MattermostInteractionHandlerTest extends TestCase
             $notifier,
             $sessionStore,
             new FixedMattermostThreadContextProvider(),
+            new FixedWorkflowSelector(WorkflowSelection::selected($this->workflow())),
         );
 
         $firstResult = $handler->handle($this->event());
@@ -37,9 +41,31 @@ final class MattermostInteractionHandlerTest extends TestCase
         self::assertTrue($firstResult->isHandled());
         self::assertFalse($secondResult->isHandled());
         self::assertSame(1, $notifier->typingCount);
-        self::assertSame(['Accepted. I will continue this Mattermost thread as session `post`.'], $notifier->progressMessages);
+        self::assertSame(['Accepted workflow `developer`. I will continue this Mattermost thread as session `post`.'], $notifier->progressMessages);
         self::assertSame(['mattermost:team:channel:post'], $sessionStore->sessionKeys);
+        self::assertSame(['developer'], $sessionStore->workflowNames);
         self::assertSame([['root text', '@Codex help']], $sessionStore->threadMessages);
+    }
+
+    public function testItReturnsWorkflowOptionsWhenSelectionFails(): void
+    {
+        $notifier = new TraceableMattermostNotifier();
+        $sessionStore = new TraceableChatSessionStore();
+        $handler = new MattermostInteractionHandler(
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
+            new MattermostSessionMapper(),
+            new InMemoryInboundEventIdempotencyStore(),
+            $notifier,
+            $sessionStore,
+            new FixedMattermostThreadContextProvider(),
+            new FixedWorkflowSelector(WorkflowSelection::unselected('Unknown workflow `sales`. Available workflows: `developer`.')),
+        );
+
+        $result = $handler->handle($this->event(text: '@Codex workflow:sales help'));
+
+        self::assertTrue($result->isHandled());
+        self::assertSame(['Unknown workflow `sales`. Available workflows: `developer`.'], $notifier->progressMessages);
+        self::assertSame([], $sessionStore->sessionKeys);
     }
 
     public function testItIgnoresMessagesWithoutTheConfiguredMention(): void
@@ -53,6 +79,7 @@ final class MattermostInteractionHandlerTest extends TestCase
             $notifier,
             $sessionStore,
             new FixedMattermostThreadContextProvider(),
+            new FixedWorkflowSelector(WorkflowSelection::selected($this->workflow())),
         );
 
         $result = $handler->handle($this->event(text: 'hello'));
@@ -77,6 +104,11 @@ final class MattermostInteractionHandlerTest extends TestCase
             '',
         );
     }
+
+    private function workflow(): WorkflowDefinition
+    {
+        return WorkflowDefinition::fromArray(['name' => 'developer', 'version' => 'v1'], '/tmp/developer.yaml', 'abc123');
+    }
 }
 
 final class TraceableChatSessionStore implements ChatSessionStore
@@ -87,18 +119,41 @@ final class TraceableChatSessionStore implements ChatSessionStore
     public array $sessionKeys = [];
 
     /**
+     * @var list<string>
+     */
+    public array $workflowNames = [];
+
+    /**
      * @var list<list<string>>
      */
     public array $threadMessages = [];
 
     #[\Override]
-    public function recordRun(ChatSessionReference $reference, string $inputSummary, ChatThreadContext $threadContext): void
-    {
+    public function recordRun(
+        ChatSessionReference $reference,
+        string $inputSummary,
+        ChatThreadContext $threadContext,
+        WorkflowDefinition $workflow,
+    ): void {
         $this->sessionKeys[] = $reference->key();
+        $this->workflowNames[] = $workflow->name();
         $this->threadMessages[] = array_map(
             static fn (ChatThreadMessage $message): string => $message->text(),
             $threadContext->messages(),
         );
+    }
+}
+
+final readonly class FixedWorkflowSelector implements WorkflowSelector
+{
+    public function __construct(private WorkflowSelection $selection)
+    {
+    }
+
+    #[\Override]
+    public function select(string $message): WorkflowSelection
+    {
+        return $this->selection;
     }
 }
 

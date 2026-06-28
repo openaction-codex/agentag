@@ -2,6 +2,7 @@
 
 namespace App\AgentTag\Session;
 
+use App\AgentTag\Workflow\WorkflowDefinition;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 
@@ -17,12 +18,19 @@ final readonly class SessionContextSnapshotBuilder
     /**
      * @param list<AgentRun> $priorRuns
      */
-    public function build(ChatSession $session, ChatThreadContext $threadContext, array $priorRuns): string
-    {
+    public function build(
+        ChatSession $session,
+        ChatThreadContext $threadContext,
+        array $priorRuns,
+        WorkflowDefinition $workflow,
+    ): string {
         $sections = [
             sprintf('Session: %s', $session->sessionKey()),
             sprintf('Platform: %s', $session->platform()),
             sprintf('Thread: %s', $session->threadId()),
+            sprintf('Workflow: %s', $workflow->name()),
+            sprintf('Workflow version: %s', $workflow->version() ?? '(none)'),
+            sprintf('Workflow revision: %s', $workflow->revision() ?? '(none)'),
             sprintf('Session summary: %s', $session->summary() ?? '(none)'),
             $this->formatThreadMessages($threadContext),
             $this->formatPriorRuns($priorRuns),

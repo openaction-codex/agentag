@@ -7,8 +7,13 @@ use Symfony\Component\Yaml\Yaml;
 
 final readonly class WorkflowCatalog
 {
-    public function __construct(private AgentTagSettings $settings)
-    {
+    private WorkflowRevisionResolver $revisionResolver;
+
+    public function __construct(
+        private AgentTagSettings $settings,
+        ?WorkflowRevisionResolver $revisionResolver = null,
+    ) {
+        $this->revisionResolver = $revisionResolver ?? new NullWorkflowRevisionResolver();
     }
 
     /**
@@ -23,6 +28,7 @@ final readonly class WorkflowCatalog
 
         $files = array_merge(glob($path.'/*.yaml') ?: [], glob($path.'/*.yml') ?: []);
         sort($files);
+        $revision = $this->revisionResolver->revisionFor($path);
 
         $workflows = [];
         foreach ($files as $file) {
@@ -31,10 +37,21 @@ final readonly class WorkflowCatalog
                 throw new \InvalidArgumentException(sprintf('Workflow file "%s" must contain a YAML mapping.', $file));
             }
 
-            $workflows[] = WorkflowDefinition::fromArray($data, $file);
+            $workflows[] = WorkflowDefinition::fromArray($data, $file, $revision);
         }
 
         return $workflows;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function names(): array
+    {
+        return array_map(
+            static fn (WorkflowDefinition $workflow): string => $workflow->name(),
+            $this->all(),
+        );
     }
 
     /**
