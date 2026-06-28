@@ -88,7 +88,7 @@ repositories:
     - openaction-codex-agentag
 ```
 
-When a workflow requests repository context, AgentTag clones each permitted repository with the local `git` CLI into `AGENTAG_WORKSPACE_PATH/runs/<run-id>/codebase/<repository-id>`. Those per-run clones are the only active working copies. Optional mirrors under `AGENTAG_WORKSPACE_PATH/cache/repositories/<repository-id>.git` may be used through `git clone --reference-if-able`, but cache mirrors are never used as the agent's working copy. The generated Codex prompt section tells the runner to inspect clones read-only and cite relevant file paths when answering.
+When a workflow requests repository context, AgentTag clones each permitted repository with the local `git` CLI into `AGENTAG_WORKSPACE_PATH/runs/<run-id>/codebase/<repository-id>`. Those per-run clones are the only active working copies, so two concurrent runs for the same repository receive distinct working trees. Optional mirrors under `AGENTAG_WORKSPACE_PATH/cache/repositories/<repository-id>.git` may be used through `git clone --reference-if-able`, but cache mirrors are never used as the agent's working copy. The generated Codex prompt section tells the runner to inspect clones read-only and cite relevant file paths when answering.
 
 Workflow files are loaded from `AGENTAG_WORKFLOWS_PATH` as local `.yaml` or `.yml` files. The workflows directory is expected to be a manually cloned, versioned repository managed outside AgentTag. Example:
 
@@ -266,7 +266,7 @@ AgentTag runs agent work through `AgentRunnerInterface`. The default implementat
 
 The orchestrator creates the isolated run workspace under `AGENTAG_WORKSPACE_PATH/runs/<run-id>` and artifacts under `AGENTAG_WORKSPACE_PATH/artifacts/<run-id>`. Runner output, redacted logs, exit code, workspace path, artifacts, and token usage when exposed by the runner are stored on the `agent_run` record. If token usage is unavailable, AgentTag leaves token fields empty rather than guessing.
 
-Operator inspection data is stored in PostgreSQL. Runs keep source chat event and requester IDs, workflow metadata, token usage, workspace path, artifacts, repository clone paths when available, and sanitized summaries. Progress updates and runner lifecycle events are stored as run events. Confirmation requests can be linked to the run that created them. Session token totals are computed from their runs for stats. Workspace cleanup only removes old isolated workspace/artifact directories when `--force` is used; it never deletes run or session history in v1.
+Operator inspection data is stored in PostgreSQL. Runs keep source chat event and requester IDs, workflow metadata, token usage, workspace path, artifacts, repository clone paths, repository base refs, created branches when available, cleanup state, and sanitized summaries. Progress updates and runner lifecycle events are stored as run events. Confirmation requests can be linked to the run that created them. Session token totals are computed from their runs for stats. Workspace cleanup only removes old isolated workspace/artifact directories when `--force` is used; it never deletes run or session history in v1.
 
 ## VPS Setup
 
@@ -304,7 +304,7 @@ User=agentag
 WantedBy=multi-user.target
 ```
 
-For deploys, pull or replace the app release, run `composer install --no-dev --optimize-autoloader`, run migrations, update the workflows checkout manually with `git -C /srv/agentag/workspace/workflows pull --ff-only`, and restart the web service. Use `agentag:workspace:cleanup` periodically in dry-run mode first, then with `--force` when you are comfortable deleting old isolated run/artifact directories.
+For deploys, pull or replace the app release, run `composer install --no-dev --optimize-autoloader`, run migrations, update the workflows checkout manually with `git -C /srv/agentag/workspace/workflows pull --ff-only`, and restart the web service. Use `agentag:workspace:cleanup --older-than-days=<days>` periodically in dry-run mode first, then with `--force` when you are comfortable deleting old isolated run/artifact directories. The retention window is the `--older-than-days` value; cleanup marks matching run workspaces as cleaned but does not delete database run/session history.
 
 The `/admin` path is protected by in-memory HTTP Basic credentials from `AGENTAG_ADMIN_USER` and `AGENTAG_ADMIN_PASSWORD`. It is reserved for the read-only EasyAdmin inspection panel: sessions, runs, run events, approvals, memories, Linear audits, and related entities are for debugging and usage review only. The operating model intentionally avoids a write-capable admin UI in v1; use explicit chat commands or console commands for supported mutations such as deleting a memory by ID.
 

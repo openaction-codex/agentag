@@ -94,17 +94,25 @@ final class OperatorCommandTest extends KernelTestCase
         $runDirectory = $this->workspaceDirectory.'/runs/old-run';
         mkdir($runDirectory);
         touch($runDirectory, time() - 172800);
+        $session = new ChatSession('mattermost:team:channel:thread', 'mattermost', 'team', 'channel', 'thread', new \DateTimeImmutable());
+        $run = new AgentRun($session, 'completed', new \DateTimeImmutable());
+        $run->recordRunnerResult('completed', 'done', 'log', $runDirectory, [], 0, null);
+        $this->entityManager()->persist($session);
+        $this->entityManager()->persist($run);
+        $this->entityManager()->flush();
 
-        $command = new CleanupWorkspaceCommand($this->workspaceLayout());
+        $command = new CleanupWorkspaceCommand($this->workspaceLayout(), $this->entityManager());
         $dryRun = new CommandTester($command);
 
         self::assertSame(Command::SUCCESS, $dryRun->execute(['--older-than-days' => '1']));
         self::assertDirectoryExists($runDirectory);
+        self::assertSame(AgentRun::WORKSPACE_CLEANUP_RETAINED, $run->workspaceCleanupState());
         self::assertStringContainsString('Dry run only', $dryRun->getDisplay());
 
         $forced = new CommandTester($command);
         self::assertSame(Command::SUCCESS, $forced->execute(['--older-than-days' => '1', '--force' => true]));
         self::assertDirectoryDoesNotExist($runDirectory);
+        self::assertSame(AgentRun::WORKSPACE_CLEANUP_CLEANED, $run->workspaceCleanupState());
     }
 
     private function memoryService(): GlobalMemoryService

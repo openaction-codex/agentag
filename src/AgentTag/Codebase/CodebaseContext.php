@@ -32,6 +32,34 @@ final readonly class CodebaseContext
         return $map;
     }
 
+    /**
+     * @return array<string, string>
+     */
+    public function baseRefMap(): array
+    {
+        $map = [];
+        foreach ($this->clones as $clone) {
+            $map[$clone->repository()->identifier()] = $clone->baseRef();
+        }
+
+        return $map;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function branchMap(): array
+    {
+        $map = [];
+        foreach ($this->clones as $clone) {
+            if (null !== $clone->createdBranch()) {
+                $map[$clone->repository()->identifier()] = $clone->createdBranch();
+            }
+        }
+
+        return $map;
+    }
+
     public function promptSection(): string
     {
         if ([] === $this->clones) {

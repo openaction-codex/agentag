@@ -10,6 +10,9 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'agent_run')]
 class AgentRun
 {
+    public const WORKSPACE_CLEANUP_RETAINED = 'retained';
+    public const WORKSPACE_CLEANUP_CLEANED = 'cleaned';
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -24,6 +27,8 @@ class AgentRun
     /**
      * @param list<string>          $artifacts
      * @param array<string, string> $repositoryClones
+     * @param array<string, string> $repositoryBaseRefs
+     * @param array<string, string> $repositoryBranches
      */
     public function __construct(
         #[ORM\ManyToOne(targetEntity: ChatSession::class, inversedBy: 'runs')]
@@ -61,6 +66,18 @@ class AgentRun
          */
         #[ORM\Column(type: 'json')]
         private array $repositoryClones = [],
+        /**
+         * @var array<string, string>
+         */
+        #[ORM\Column(type: 'json')]
+        private array $repositoryBaseRefs = [],
+        /**
+         * @var array<string, string>
+         */
+        #[ORM\Column(type: 'json')]
+        private array $repositoryBranches = [],
+        #[ORM\Column(length: 32)]
+        private string $workspaceCleanupState = self::WORKSPACE_CLEANUP_RETAINED,
         #[ORM\Column(type: 'text', nullable: true)]
         private ?string $logSummary = null,
         #[ORM\Column(nullable: true)]
@@ -157,6 +174,27 @@ class AgentRun
     }
 
     /**
+     * @return array<string, string>
+     */
+    public function repositoryBaseRefs(): array
+    {
+        return $this->repositoryBaseRefs;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function repositoryBranches(): array
+    {
+        return $this->repositoryBranches;
+    }
+
+    public function workspaceCleanupState(): string
+    {
+        return $this->workspaceCleanupState;
+    }
+
+    /**
      * @return Collection<int, RunEvent>
      */
     public function events(): Collection
@@ -214,9 +252,18 @@ class AgentRun
 
     /**
      * @param array<string, string> $repositoryClones
+     * @param array<string, string> $repositoryBaseRefs
+     * @param array<string, string> $repositoryBranches
      */
-    public function recordRepositoryClones(array $repositoryClones): void
+    public function recordRepositoryClones(array $repositoryClones, array $repositoryBaseRefs = [], array $repositoryBranches = []): void
     {
         $this->repositoryClones = $repositoryClones;
+        $this->repositoryBaseRefs = $repositoryBaseRefs;
+        $this->repositoryBranches = $repositoryBranches;
+    }
+
+    public function markWorkspaceCleaned(): void
+    {
+        $this->workspaceCleanupState = self::WORKSPACE_CLEANUP_CLEANED;
     }
 }

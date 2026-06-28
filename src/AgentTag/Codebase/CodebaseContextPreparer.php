@@ -26,7 +26,7 @@ final readonly class CodebaseContextPreparer
 
         $context = new CodebaseContext($clones);
         if (null !== $run) {
-            $run->recordRepositoryClones($context->cloneMap());
+            $run->recordRepositoryClones($context->cloneMap(), $context->baseRefMap(), $context->branchMap());
             $this->entityManager?->flush();
             $this->logger?->info('Recorded repository clones for run.', [
                 'run_id' => $run->id(),

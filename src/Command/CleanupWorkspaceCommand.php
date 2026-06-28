@@ -3,6 +3,8 @@
 namespace App\Command;
 
 use App\AgentTag\Workspace\WorkspaceLayout;
+use App\Entity\AgentRun;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -13,8 +15,10 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand(name: 'agentag:workspace:cleanup', description: 'List or delete old isolated workspace directories without deleting run history.')]
 final class CleanupWorkspaceCommand extends Command
 {
-    public function __construct(private readonly WorkspaceLayout $workspaceLayout)
-    {
+    public function __construct(
+        private readonly WorkspaceLayout $workspaceLayout,
+        private readonly ?EntityManagerInterface $entityManager = null,
+    ) {
         parent::__construct();
     }
 
@@ -59,6 +63,7 @@ final class CleanupWorkspaceCommand extends Command
 
         foreach ($candidates as $path) {
             $this->removeDirectory($path);
+            $this->markWorkspaceCleaned($path);
         }
         $io->success(sprintf('Deleted %d workspace director%s. Database run/session history was not deleted.', count($candidates), 1 === count($candidates) ? 'y' : 'ies'));
 
@@ -95,5 +100,20 @@ final class CleanupWorkspaceCommand extends Command
         }
 
         rmdir($path);
+    }
+
+    private function markWorkspaceCleaned(string $path): void
+    {
+        if (null === $this->entityManager) {
+            return;
+        }
+
+        $run = $this->entityManager->getRepository(AgentRun::class)->findOneBy(['workspacePath' => $path]);
+        if (!$run instanceof AgentRun) {
+            return;
+        }
+
+        $run->markWorkspaceCleaned();
+        $this->entityManager->flush();
     }
 }
