@@ -32,3 +32,13 @@ services:
         arguments:
             $workspacePath: '%env(string:AGENTAG_WORKSPACE_PATH)%'
             $workflowsPath: '%env(string:AGENTAG_WORKFLOWS_PATH)%'
+
+    App\AgentTag\Mattermost\MattermostWebhookAuthenticator:
+        arguments:
+            $expectedToken: '%env(string:MATTERMOST_WEBHOOK_TOKEN)%'
+
+    App\AgentTag\Mattermost\MattermostNotifier:
+        alias: App\AgentTag\Mattermost\NullMattermostNotifier
+
+    App\AgentTag\Mattermost\InboundEventIdempotencyStore:
+        alias: App\AgentTag\Mattermost\InMemoryInboundEventIdempotencyStore

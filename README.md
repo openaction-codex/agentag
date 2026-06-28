@@ -133,6 +133,14 @@ Mattermost support is implemented in later stories. The intended interaction mod
 - Start a new root message/thread for a new topic.
 - Each substantial agent action inside the session creates its own isolated run workspace.
 
+The initial webhook endpoint is:
+
+```text
+POST /integrations/mattermost/webhook
+```
+
+Configure `MATTERMOST_WEBHOOK_TOKEN` when using a Mattermost outgoing webhook token. Leave it empty only for local development.
+
 Global memory is explicit-only:
 
 - The agent must ask before adding memory unless the user explicitly asks it to remember something.
