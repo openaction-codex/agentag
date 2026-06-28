@@ -4,6 +4,8 @@ namespace App\AgentTag\Slack;
 
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
+use App\AgentTag\Memory\GlobalMemoryCommandContext;
+use App\AgentTag\Memory\GlobalMemoryCommandHandler;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Workflow\WorkflowSelector;
 
@@ -17,6 +19,7 @@ final readonly class SlackInteractionHandler
         private ChatSessionStore $sessionStore,
         private SlackThreadContextProvider $threadContextProvider,
         private WorkflowSelector $workflowSelector,
+        private ?GlobalMemoryCommandHandler $memoryCommandHandler = null,
     ) {
     }
 
@@ -28,6 +31,21 @@ final readonly class SlackInteractionHandler
 
         if (!$this->idempotencyStore->remember('slack:'.$event->eventId())) {
             return SlackInteractionResult::duplicate();
+        }
+
+        if (null !== $this->memoryCommandHandler) {
+            $memoryMessage = $this->memoryCommandHandler->handle($event->text(), new GlobalMemoryCommandContext(
+                'slack',
+                $event->userId(),
+                '' === $event->threadTs() ? $event->eventTs() : $event->threadTs(),
+                $event->eventTs(),
+            ));
+            if (null !== $memoryMessage) {
+                $this->notifier->showTyping($event);
+                $this->notifier->postProgress($event, $memoryMessage);
+
+                return SlackInteractionResult::handled($memoryMessage);
+            }
         }
 
         $selection = $this->workflowSelector->select($event->text());

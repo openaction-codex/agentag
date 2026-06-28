@@ -2,15 +2,19 @@
 
 namespace App\AgentTag\Session;
 
+use App\AgentTag\Memory\GlobalMemoryService;
 use App\AgentTag\Tool\ToolDefinition;
 use App\AgentTag\Workflow\WorkflowDefinition;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
+use App\Entity\GlobalMemory;
 
 final readonly class SessionContextSnapshotBuilder
 {
-    public function __construct(private int $maxCharacters)
-    {
+    public function __construct(
+        private int $maxCharacters,
+        private ?GlobalMemoryService $globalMemoryService = null,
+    ) {
         if ($maxCharacters < 1000) {
             throw new \InvalidArgumentException('AgentTag context max characters must be at least 1000.');
         }
@@ -38,7 +42,7 @@ final readonly class SessionContextSnapshotBuilder
             $this->formatTools($tools),
             $this->formatThreadMessages($threadContext),
             $this->formatPriorRuns($priorRuns),
-            'Explicit global memories: none configured.',
+            $this->formatGlobalMemories(),
             'Relevant links/artifacts: none recorded.',
         ];
 
@@ -111,6 +115,32 @@ final readonly class SessionContextSnapshotBuilder
         }
 
         return implode("\n", $lines);
+    }
+
+    private function formatGlobalMemories(): string
+    {
+        $lines = ['Explicit global memories:'];
+        $memories = $this->globalMemoryService?->all() ?? [];
+
+        foreach ($memories as $memory) {
+            $lines[] = $this->formatGlobalMemory($memory);
+        }
+
+        if (1 === count($lines)) {
+            $lines[] = '- (none)';
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function formatGlobalMemory(GlobalMemory $memory): string
+    {
+        $id = $memory->id();
+        if (null === $id) {
+            throw new \LogicException('Stored global memories must have an ID.');
+        }
+
+        return sprintf('- #%d: %s', $id, $this->singleLine($memory->content()));
     }
 
     private function singleLine(string $value): string

@@ -4,6 +4,7 @@ namespace App\Tests\Controller;
 
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
+use App\Entity\GlobalMemory;
 use App\Tests\RefreshDatabaseTrait;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -52,6 +53,21 @@ final class MattermostWebhookControllerTest extends WebTestCase
         self::assertStringContainsString('session `root-id`', (string) $client->getResponse()->getContent());
         self::assertSame(1, $this->entityCount(ChatSession::class));
         self::assertSame(1, $this->entityCount(AgentRun::class));
+    }
+
+    public function testItHandlesExplicitMemoryCommandsWithoutCreatingRuns(): void
+    {
+        $client = $this->createClientWithFreshDatabase();
+
+        $client->jsonRequest('POST', '/integrations/mattermost/webhook', $this->payload([
+            'text' => '@Codex remember that reviews should mention test coverage',
+        ]));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('Stored global memory #1.', (string) $client->getResponse()->getContent());
+        self::assertSame(1, $this->entityCount(GlobalMemory::class));
+        self::assertSame(0, $this->entityCount(ChatSession::class));
+        self::assertSame(0, $this->entityCount(AgentRun::class));
     }
 
     public function testItRejectsInvalidPayloads(): void

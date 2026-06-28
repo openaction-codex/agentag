@@ -4,6 +4,8 @@ namespace App\AgentTag\Mattermost;
 
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
+use App\AgentTag\Memory\GlobalMemoryCommandContext;
+use App\AgentTag\Memory\GlobalMemoryCommandHandler;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Workflow\WorkflowSelector;
 
@@ -17,6 +19,7 @@ final readonly class MattermostInteractionHandler
         private ChatSessionStore $sessionStore,
         private MattermostThreadContextProvider $threadContextProvider,
         private WorkflowSelector $workflowSelector,
+        private ?GlobalMemoryCommandHandler $memoryCommandHandler = null,
     ) {
     }
 
@@ -28,6 +31,21 @@ final readonly class MattermostInteractionHandler
 
         if (!$this->idempotencyStore->remember('mattermost:'.$event->eventId())) {
             return MattermostInteractionResult::duplicate();
+        }
+
+        if (null !== $this->memoryCommandHandler) {
+            $memoryMessage = $this->memoryCommandHandler->handle($event->text(), new GlobalMemoryCommandContext(
+                'mattermost',
+                $event->userId(),
+                '' === $event->rootId() ? $event->postId() : $event->rootId(),
+                $event->postId(),
+            ));
+            if (null !== $memoryMessage) {
+                $this->notifier->showTyping($event);
+                $this->notifier->postProgress($event, $memoryMessage);
+
+                return MattermostInteractionResult::handled($memoryMessage);
+            }
         }
 
         $selection = $this->workflowSelector->select($event->text());

@@ -13,6 +13,7 @@ This repository is being implemented user story by user story from Linear `OPE-1
 - A `/health` endpoint.
 - Mattermost and Slack webhook entrypoints with thread/session mapping.
 - PostgreSQL-backed chat sessions and agent run records with redacted context snapshots.
+- Explicit-only global memories with chat commands to remember, list, and delete entries by ID.
 - Configured Linear tool instructions with persisted write audits for comments, issues, subissues, and description updates.
 - PHPUnit, php-cs-fixer with Symfony rules, phpstan at max level, and GitHub Actions CI.
 
@@ -301,8 +302,11 @@ Configure `SLACK_VERIFICATION_TOKEN` if you use Slack's verification token flow.
 Global memory is explicit-only:
 
 - The agent must ask before adding memory unless the user explicitly asks it to remember something.
-- Users can list memories and delete a memory by ID once memory commands are implemented.
+- `@Codex remember that <content>` stores an explicit memory after redacting sensitive values. Secret-only content is refused.
+- `@Codex memories` or `@Codex what do you remember?` lists current memories with stable IDs.
+- `@Codex delete memory <id>` deletes a global memory by ID. Run and session history is not deleted in v1.
 - Sensitive values are redacted or refused before storage.
+- Stored global memories are added to later run context separately from thread summaries and prior run metadata.
 
 ## Review Discipline
 
