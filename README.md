@@ -11,6 +11,8 @@ This repository is being implemented user story by user story from Linear `OPE-1
 - Optional Redis-compatible Messenger/cache wiring through Symfony configuration when needed later.
 - A configurable AgentTag workspace layout.
 - A `/health` endpoint.
+- Mattermost and Slack webhook entrypoints with thread/session mapping.
+- PostgreSQL-backed chat sessions and agent run records with redacted context snapshots.
 - PHPUnit, php-cs-fixer with Symfony rules, phpstan at max level, and GitHub Actions CI.
 
 ## Requirements
@@ -41,8 +43,14 @@ AGENTAG_TAG=@Codex
 AGENTAG_WORKSPACE_PATH=/srv/agentag/workspace
 AGENTAG_WORKFLOWS_PATH=/srv/agentag/workspace/workflows
 AGENTAG_REPOSITORY_URLS=git@github.com:example/api.git,git@github.com:example/web.git
+AGENTAG_CONTEXT_MAX_CHARS=12000
 AGENTAG_ADMIN_USER=admin
 AGENTAG_ADMIN_PASSWORD=change-this
+
+MATTERMOST_WEBHOOK_TOKEN=change-this
+MATTERMOST_BASE_URL=https://mattermost.example.com
+MATTERMOST_BOT_TOKEN=change-this
+MATTERMOST_RECENT_REPLY_LIMIT=20
 ```
 
 The workflows repository is intentionally not hard-coded in AgentTag. Clone it yourself into the configured workspace path:
@@ -117,7 +125,7 @@ A practical VPS deployment is:
 3. Create `/srv/agentag/workspace` and clone your workflows repository to `/srv/agentag/workspace/workflows`.
 4. Configure `.env.local` or real environment variables with `APP_SECRET`, `DATABASE_URL`, `AGENTAG_*`, Mattermost credentials, and later Linear/GitHub tokens as needed.
 5. Run `composer install --no-dev --optimize-autoloader`.
-6. Run Doctrine migrations once migrations exist.
+6. Run Doctrine migrations: `bin/console doctrine:migrations:migrate --no-interaction`.
 7. Run the web process behind nginx/Caddy/Apache or Symfony CLI.
 8. Run Symfony Messenger workers if asynchronous jobs are configured in later stories.
 9. Protect logs and `.env.local` with normal server file permissions.
@@ -126,12 +134,15 @@ The read-only EasyAdmin panel will be added in a later story and protected by in
 
 ## Mattermost Usage Model
 
-Mattermost support is implemented in later stories. The intended interaction model is:
+The interaction model is:
 
 - Mention `@Codex` in a root Mattermost message to start a new AgentTag session.
 - Continue in the same Mattermost thread to keep the same session context.
 - Start a new root message/thread for a new topic.
 - Each substantial agent action inside the session creates its own isolated run workspace.
+- Each accepted mention creates an `agent_run` row linked to the thread `chat_session`.
+- The stored context snapshot includes bounded thread messages, prior run summaries, explicit-memory placeholders, and link/artifact placeholders.
+- Context snapshots and input summaries are redacted before storage.
 
 The initial webhook endpoint is:
 
@@ -140,6 +151,8 @@ POST /integrations/mattermost/webhook
 ```
 
 Configure `MATTERMOST_WEBHOOK_TOKEN` when using a Mattermost outgoing webhook token. Leave it empty only for local development.
+
+Configure `MATTERMOST_BASE_URL` and `MATTERMOST_BOT_TOKEN` to let AgentTag fetch the root post and recent replies through Mattermost's REST API. Without those values, local development falls back to the inbound webhook message only. `MATTERMOST_RECENT_REPLY_LIMIT` bounds fetched thread messages, and `AGENTAG_CONTEXT_MAX_CHARS` bounds persisted context snapshots.
 
 Slack support is intentionally thin until the Mattermost path is complete. It can be disabled with `SLACK_ENABLED=0`. The initial Slack events endpoint is:
 

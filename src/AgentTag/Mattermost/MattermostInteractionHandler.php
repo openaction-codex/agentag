@@ -4,6 +4,7 @@ namespace App\AgentTag\Mattermost;
 
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
+use App\AgentTag\Session\ChatSessionStore;
 
 final readonly class MattermostInteractionHandler
 {
@@ -12,6 +13,8 @@ final readonly class MattermostInteractionHandler
         private MattermostSessionMapper $sessionMapper,
         private InboundEventIdempotencyStore $idempotencyStore,
         private MattermostNotifier $notifier,
+        private ChatSessionStore $sessionStore,
+        private MattermostThreadContextProvider $threadContextProvider,
     ) {
     }
 
@@ -26,6 +29,12 @@ final readonly class MattermostInteractionHandler
         }
 
         $session = $this->sessionMapper->map($event);
+        $this->sessionStore->recordRun(
+            $session,
+            sprintf('Mattermost message %s from user %s.', $event->eventId(), $event->userId()),
+            $this->threadContextProvider->contextFor($event),
+        );
+
         $message = sprintf(
             'Accepted. I will continue this Mattermost thread as session `%s`.',
             $session->threadId(),

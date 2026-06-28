@@ -43,6 +43,22 @@ services:
     App\AgentTag\Chat\InboundEventIdempotencyStore:
         alias: App\AgentTag\Chat\InMemoryInboundEventIdempotencyStore
 
+    App\AgentTag\Session\ChatSessionStore:
+        alias: App\AgentTag\Session\DoctrineChatSessionStore
+
+    App\AgentTag\Session\SessionContextSnapshotBuilder:
+        arguments:
+            $maxCharacters: '%env(int:AGENTAG_CONTEXT_MAX_CHARS)%'
+
+    App\AgentTag\Mattermost\MattermostApiSettings:
+        arguments:
+            $baseUrl: '%env(string:MATTERMOST_BASE_URL)%'
+            $botToken: '%env(string:MATTERMOST_BOT_TOKEN)%'
+            $recentReplyLimit: '%env(int:MATTERMOST_RECENT_REPLY_LIMIT)%'
+
+    App\AgentTag\Mattermost\MattermostThreadContextProvider:
+        alias: App\AgentTag\Mattermost\MattermostApiThreadContextProvider
+
     App\AgentTag\Slack\SlackSettings:
         arguments:
             $enabled: '%env(bool:SLACK_ENABLED)%'
@@ -50,3 +66,6 @@ services:
 
     App\AgentTag\Slack\SlackNotifier:
         alias: App\AgentTag\Slack\NullSlackNotifier
+
+    App\AgentTag\Slack\SlackThreadContextProvider:
+        alias: App\AgentTag\Slack\CurrentSlackThreadContextProvider

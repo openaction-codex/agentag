@@ -2,13 +2,20 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\AgentRun;
+use App\Entity\ChatSession;
+use App\Tests\RefreshDatabaseTrait;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 final class SlackEventsControllerTest extends WebTestCase
 {
+    use RefreshDatabaseTrait;
+
     public function testItHandlesUrlVerification(): void
     {
-        $client = static::createClient();
+        $client = $this->createClientWithFreshDatabase();
 
         $client->jsonRequest('POST', '/integrations/slack/events', [
             'type' => 'url_verification',
@@ -21,27 +28,31 @@ final class SlackEventsControllerTest extends WebTestCase
 
     public function testItIgnoresMessagesWithoutTheConfiguredTag(): void
     {
-        $client = static::createClient();
+        $client = $this->createClientWithFreshDatabase();
 
         $client->jsonRequest('POST', '/integrations/slack/events', $this->payload(['text' => 'hello']));
 
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('"handled":false', (string) $client->getResponse()->getContent());
+        self::assertSame(0, $this->entityCount(ChatSession::class));
+        self::assertSame(0, $this->entityCount(AgentRun::class));
     }
 
     public function testItAcceptsMentionedRootMessages(): void
     {
-        $client = static::createClient();
+        $client = $this->createClientWithFreshDatabase();
 
         $client->jsonRequest('POST', '/integrations/slack/events', $this->payload(['text' => '@Codex help']));
 
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('session `1700000000.000000`', (string) $client->getResponse()->getContent());
+        self::assertSame(1, $this->entityCount(ChatSession::class));
+        self::assertSame(1, $this->entityCount(AgentRun::class));
     }
 
     public function testItContinuesThreadRepliesUsingThreadTs(): void
     {
-        $client = static::createClient();
+        $client = $this->createClientWithFreshDatabase();
 
         $client->jsonRequest('POST', '/integrations/slack/events', $this->payload([
             'text' => '@Codex continue',
@@ -50,15 +61,19 @@ final class SlackEventsControllerTest extends WebTestCase
 
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('session `1699999999.000000`', (string) $client->getResponse()->getContent());
+        self::assertSame(1, $this->entityCount(ChatSession::class));
+        self::assertSame(1, $this->entityCount(AgentRun::class));
     }
 
     public function testItRejectsInvalidPayloads(): void
     {
-        $client = static::createClient();
+        $client = $this->createClientWithFreshDatabase();
 
         $client->jsonRequest('POST', '/integrations/slack/events', ['type' => 'event_callback']);
 
         self::assertResponseStatusCodeSame(400);
+        self::assertSame(0, $this->entityCount(ChatSession::class));
+        self::assertSame(0, $this->entityCount(AgentRun::class));
     }
 
     /**
@@ -82,5 +97,24 @@ final class SlackEventsControllerTest extends WebTestCase
                 'user' => 'U123',
             ], $eventOverrides),
         ];
+    }
+
+    private function createClientWithFreshDatabase(): KernelBrowser
+    {
+        $client = static::createClient();
+        $this->refreshDatabase();
+
+        return $client;
+    }
+
+    /**
+     * @param class-string<object> $className
+     */
+    private function entityCount(string $className): int
+    {
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+
+        return count($entityManager->getRepository($className)->findAll());
     }
 }

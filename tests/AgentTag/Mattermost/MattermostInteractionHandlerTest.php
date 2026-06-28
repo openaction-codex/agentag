@@ -2,6 +2,7 @@
 
 namespace App\Tests\AgentTag\Mattermost;
 
+use App\AgentTag\Chat\ChatSessionReference;
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InMemoryInboundEventIdempotencyStore;
 use App\AgentTag\Configuration\AgentTagSettings;
@@ -9,6 +10,10 @@ use App\AgentTag\Mattermost\MattermostInboundEvent;
 use App\AgentTag\Mattermost\MattermostInteractionHandler;
 use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostSessionMapper;
+use App\AgentTag\Mattermost\MattermostThreadContextProvider;
+use App\AgentTag\Session\ChatSessionStore;
+use App\AgentTag\Session\ChatThreadContext;
+use App\AgentTag\Session\ChatThreadMessage;
 use PHPUnit\Framework\TestCase;
 
 final class MattermostInteractionHandlerTest extends TestCase
@@ -16,11 +21,14 @@ final class MattermostInteractionHandlerTest extends TestCase
     public function testItPostsProgressForMentionedMessagesAndIgnoresDuplicates(): void
     {
         $notifier = new TraceableMattermostNotifier();
+        $sessionStore = new TraceableChatSessionStore();
         $handler = new MattermostInteractionHandler(
             new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
             new MattermostSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,
+            $sessionStore,
+            new FixedMattermostThreadContextProvider(),
         );
 
         $firstResult = $handler->handle($this->event());
@@ -30,16 +38,21 @@ final class MattermostInteractionHandlerTest extends TestCase
         self::assertFalse($secondResult->isHandled());
         self::assertSame(1, $notifier->typingCount);
         self::assertSame(['Accepted. I will continue this Mattermost thread as session `post`.'], $notifier->progressMessages);
+        self::assertSame(['mattermost:team:channel:post'], $sessionStore->sessionKeys);
+        self::assertSame([['root text', '@Codex help']], $sessionStore->threadMessages);
     }
 
     public function testItIgnoresMessagesWithoutTheConfiguredMention(): void
     {
         $notifier = new TraceableMattermostNotifier();
+        $sessionStore = new TraceableChatSessionStore();
         $handler = new MattermostInteractionHandler(
             new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
             new MattermostSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,
+            $sessionStore,
+            new FixedMattermostThreadContextProvider(),
         );
 
         $result = $handler->handle($this->event(text: 'hello'));
@@ -47,6 +60,7 @@ final class MattermostInteractionHandlerTest extends TestCase
         self::assertFalse($result->isHandled());
         self::assertSame(0, $notifier->typingCount);
         self::assertSame([], $notifier->progressMessages);
+        self::assertSame([], $sessionStore->sessionKeys);
     }
 
     private function event(string $text = '@Codex help'): MattermostInboundEvent
@@ -62,6 +76,41 @@ final class MattermostInteractionHandlerTest extends TestCase
             'user',
             '',
         );
+    }
+}
+
+final class TraceableChatSessionStore implements ChatSessionStore
+{
+    /**
+     * @var list<string>
+     */
+    public array $sessionKeys = [];
+
+    /**
+     * @var list<list<string>>
+     */
+    public array $threadMessages = [];
+
+    #[\Override]
+    public function recordRun(ChatSessionReference $reference, string $inputSummary, ChatThreadContext $threadContext): void
+    {
+        $this->sessionKeys[] = $reference->key();
+        $this->threadMessages[] = array_map(
+            static fn (ChatThreadMessage $message): string => $message->text(),
+            $threadContext->messages(),
+        );
+    }
+}
+
+final readonly class FixedMattermostThreadContextProvider implements MattermostThreadContextProvider
+{
+    #[\Override]
+    public function contextFor(MattermostInboundEvent $event): ChatThreadContext
+    {
+        return new ChatThreadContext([
+            new ChatThreadMessage('root', 'user-a', 'root text'),
+            new ChatThreadMessage($event->postId(), $event->userId(), $event->text()),
+        ]);
     }
 }
 

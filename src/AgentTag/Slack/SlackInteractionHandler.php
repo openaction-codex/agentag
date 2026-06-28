@@ -4,6 +4,7 @@ namespace App\AgentTag\Slack;
 
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
+use App\AgentTag\Session\ChatSessionStore;
 
 final readonly class SlackInteractionHandler
 {
@@ -12,6 +13,8 @@ final readonly class SlackInteractionHandler
         private SlackSessionMapper $sessionMapper,
         private InboundEventIdempotencyStore $idempotencyStore,
         private SlackNotifier $notifier,
+        private ChatSessionStore $sessionStore,
+        private SlackThreadContextProvider $threadContextProvider,
     ) {
     }
 
@@ -26,6 +29,12 @@ final readonly class SlackInteractionHandler
         }
 
         $session = $this->sessionMapper->map($event);
+        $this->sessionStore->recordRun(
+            $session,
+            sprintf('Slack event %s from user %s.', $event->eventId(), $event->userId()),
+            $this->threadContextProvider->contextFor($event),
+        );
+
         $message = sprintf('Accepted. I will continue this Slack thread as session `%s`.', $session->threadId());
 
         $this->notifier->showTyping($event);
