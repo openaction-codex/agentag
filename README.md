@@ -13,6 +13,7 @@ This repository is being implemented user story by user story from Linear `OPE-1
 - A `/health` endpoint.
 - Mattermost and Slack webhook entrypoints with thread/session mapping.
 - PostgreSQL-backed chat sessions and agent run records with redacted context snapshots.
+- Configured Linear tool instructions with persisted write audits for comments, issues, subissues, and description updates.
 - PHPUnit, php-cs-fixer with Symfony rules, phpstan at max level, and GitHub Actions CI.
 
 ## Requirements
@@ -178,6 +179,21 @@ sandbox: no_sandbox
 ```
 
 `type` is `cli` or `mcp`. CLI tools define `command`; MCP tools define `server`. `allowed_workflows` limits where a tool is available, and selected runs only include tools both requested by the workflow and allowed by the tool. `sensitivity` is `non_sensitive`, `sensitive`, or `destructive`; non-sensitive tools do not require confirmation by default, while sensitive and destructive tools do. Use `confirmation_policy: always` to force confirmation for any tool. `sandbox: no_sandbox` records that the tool is permitted to run with full host access.
+
+Linear access is provided through a configured tool named `linear`; AgentTag prepares instructions for that configured MCP or CLI tool rather than embedding a large native Linear client in v1:
+
+```yaml
+name: linear
+type: mcp
+server: linear
+allowed_workflows:
+    - product
+    - developer
+sensitivity: non_sensitive
+confirmation_policy: default
+```
+
+Workflows that list `linear` can request issue reads and non-destructive writes. Creating comments, issues, and subissues is non-sensitive by default. Appending to descriptions is non-sensitive, while replacing existing descriptions creates an approval request before execution. Linear write results are audited with the source chat message id, workflow, requester, target issue when available, resulting issue identifiers, status, timestamp, and redacted failure summary.
 
 ## Local Development
 

@@ -11,6 +11,7 @@ final class LinearOperationPolicyTest extends TestCase
     {
         $policy = new LinearOperationPolicy();
 
+        self::assertFalse($policy->requiresConfirmation(LinearOperationPolicy::READ_ISSUE));
         self::assertFalse($policy->requiresConfirmation(LinearOperationPolicy::CREATE_COMMENT));
         self::assertFalse($policy->requiresConfirmation(LinearOperationPolicy::CREATE_ISSUE));
         self::assertFalse($policy->requiresConfirmation(LinearOperationPolicy::CREATE_SUBISSUE));
