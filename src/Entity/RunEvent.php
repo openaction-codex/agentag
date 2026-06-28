@@ -69,4 +69,43 @@ class RunEvent
     {
         return $this->createdAt;
     }
+
+    public function getId(): ?int
+    {
+        return $this->id();
+    }
+
+    public function getRun(): AgentRun
+    {
+        return $this->run();
+    }
+
+    public function getType(): string
+    {
+        return $this->type();
+    }
+
+    public function getMessage(): string
+    {
+        return $this->message();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getMetadata(): array
+    {
+        return $this->metadata();
+    }
+
+    public function getCreatedAt(): \DateTimeImmutable
+    {
+        return $this->createdAt();
+    }
+
+    #[\Override]
+    public function __toString(): string
+    {
+        return sprintf('Run event #%s (%s)', $this->id ?? 'new', $this->type);
+    }
 }

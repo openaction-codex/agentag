@@ -151,6 +151,65 @@ class LinearWriteAudit
         return $this->createdAt;
     }
 
+    public function getId(): ?int
+    {
+        return $this->id();
+    }
+
+    public function getOperation(): string
+    {
+        return $this->operation();
+    }
+
+    public function getSourceMessageId(): string
+    {
+        return $this->sourceMessageId();
+    }
+
+    public function getWorkflowName(): string
+    {
+        return $this->workflowName();
+    }
+
+    public function getRequesterId(): string
+    {
+        return $this->requesterId();
+    }
+
+    public function getTargetIssueIdentifier(): ?string
+    {
+        return $this->targetIssueIdentifier();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getResultingIssueIdentifiers(): array
+    {
+        return $this->resultingIssueIdentifiers();
+    }
+
+    public function getStatus(): string
+    {
+        return $this->status();
+    }
+
+    public function getFailureSummary(): ?string
+    {
+        return $this->failureSummary();
+    }
+
+    public function getCreatedAt(): \DateTimeImmutable
+    {
+        return $this->createdAt();
+    }
+
+    #[\Override]
+    public function __toString(): string
+    {
+        return sprintf('Linear write #%s (%s)', $this->id ?? 'new', $this->status);
+    }
+
     /**
      * @param list<string> $values
      */

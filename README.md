@@ -306,7 +306,7 @@ WantedBy=multi-user.target
 
 For deploys, pull or replace the app release, run `composer install --no-dev --optimize-autoloader`, run migrations, update the workflows checkout manually with `git -C /srv/agentag/workspace/workflows pull --ff-only`, and restart the web service. Use `agentag:workspace:cleanup --older-than-days=<days>` periodically in dry-run mode first, then with `--force` when you are comfortable deleting old isolated run/artifact directories. The retention window is the `--older-than-days` value; cleanup marks matching run workspaces as cleaned but does not delete database run/session history.
 
-The `/admin` path is protected by in-memory HTTP Basic credentials from `AGENTAG_ADMIN_USER` and `AGENTAG_ADMIN_PASSWORD`. It is reserved for the read-only EasyAdmin inspection panel: sessions, runs, run events, approvals, memories, Linear audits, and related entities are for debugging and usage review only. The operating model intentionally avoids a write-capable admin UI in v1; use explicit chat commands or console commands for supported mutations such as deleting a memory by ID.
+The `/admin` path is protected by in-memory HTTP Basic credentials from `AGENTAG_ADMIN_USER` and `AGENTAG_ADMIN_PASSWORD`. It opens a read-only EasyAdmin inspection panel for sessions, runs, run events, approvals, global memories, and Linear write audits. Run rows expose workflow metadata, token counts, artifacts, repository clone/base/branch metadata, workspace cleanup state, and redacted context/output/log snapshots for debugging and usage review. Create, edit, delete, and batch delete actions are disabled in the UI and rejected by the controllers; use explicit chat commands or console commands for supported mutations such as deleting a memory by ID.
 
 ## Mattermost Usage Model
 
@@ -348,7 +348,7 @@ Global memory is explicit-only:
 - Sensitive values are redacted or refused before storage.
 - Stored global memories are added to later run context separately from thread summaries and prior run metadata.
 
-Sensitive values are redacted from persisted context, runner output, run events, logs, and memory. `AGENTAG_REDACTION_PATTERNS` can add newline-separated PCRE patterns or a JSON array of PCRE patterns for organization-specific values; invalid patterns fail configuration early. Routes under `/admin` require HTTP Basic authentication using `AGENTAG_ADMIN_USER` and `AGENTAG_ADMIN_PASSWORD`.
+Sensitive values are redacted from persisted context, runner output, run events, logs, memory, and sensitive admin fields. `AGENTAG_REDACTION_PATTERNS` can add newline-separated PCRE patterns or a JSON array of PCRE patterns for organization-specific values; invalid patterns fail configuration early. Routes under `/admin` require HTTP Basic authentication using `AGENTAG_ADMIN_USER` and `AGENTAG_ADMIN_PASSWORD`.
 
 ## Review Discipline
 

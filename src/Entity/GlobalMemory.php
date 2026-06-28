@@ -66,4 +66,45 @@ class GlobalMemory
     {
         return $this->sourceMessageId;
     }
+
+    public function getId(): ?int
+    {
+        return $this->id();
+    }
+
+    public function getContent(): string
+    {
+        return $this->content();
+    }
+
+    public function getCreatedAt(): \DateTimeImmutable
+    {
+        return $this->createdAt();
+    }
+
+    public function getCreatedBy(): string
+    {
+        return $this->createdBy();
+    }
+
+    public function getSourcePlatform(): string
+    {
+        return $this->sourcePlatform();
+    }
+
+    public function getSourceThreadId(): string
+    {
+        return $this->sourceThreadId();
+    }
+
+    public function getSourceMessageId(): string
+    {
+        return $this->sourceMessageId();
+    }
+
+    #[\Override]
+    public function __toString(): string
+    {
+        return sprintf('Memory #%s', $this->id ?? 'new');
+    }
 }

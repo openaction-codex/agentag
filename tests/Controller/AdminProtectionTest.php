@@ -20,7 +20,9 @@ final class AdminProtectionTest extends WebTestCase
             'PHP_AUTH_PW' => 'change-me',
         ]);
 
+        self::assertResponseRedirects('/admin/chat-session');
+        $client->followRedirect();
         self::assertResponseIsSuccessful();
-        self::assertStringContainsString('admin_protected', (string) $client->getResponse()->getContent());
+        self::assertStringContainsString('AgentTag', (string) $client->getResponse()->getContent());
     }
 }

@@ -173,6 +173,72 @@ class ApprovalRequest
         );
     }
 
+    public function getId(): ?int
+    {
+        return $this->id();
+    }
+
+    public function getRun(): ?AgentRun
+    {
+        return $this->run();
+    }
+
+    public function getAction(): string
+    {
+        return $this->action();
+    }
+
+    public function getTargetSystem(): string
+    {
+        return $this->targetSystem();
+    }
+
+    public function getWorkflowName(): string
+    {
+        return $this->workflowName();
+    }
+
+    public function getRequesterId(): string
+    {
+        return $this->requesterId();
+    }
+
+    public function getExpectedEffect(): string
+    {
+        return $this->expectedEffect();
+    }
+
+    public function getSensitivity(): string
+    {
+        return $this->sensitivity();
+    }
+
+    public function getCreatedAt(): \DateTimeImmutable
+    {
+        return $this->createdAt();
+    }
+
+    public function getStatus(): string
+    {
+        return $this->status();
+    }
+
+    public function getApproverId(): ?string
+    {
+        return $this->approverId();
+    }
+
+    public function getDecidedAt(): ?\DateTimeImmutable
+    {
+        return $this->decidedAt();
+    }
+
+    #[\Override]
+    public function __toString(): string
+    {
+        return sprintf('Approval #%s (%s)', $this->id ?? 'new', $this->status);
+    }
+
     private function isPending(): bool
     {
         return self::STATUS_PENDING === $this->status;

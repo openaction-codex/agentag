@@ -89,6 +89,75 @@ class ChatSession
         return $this->runs;
     }
 
+    public function getId(): ?int
+    {
+        return $this->id();
+    }
+
+    public function getSessionKey(): string
+    {
+        return $this->sessionKey();
+    }
+
+    public function getPlatform(): string
+    {
+        return $this->platform();
+    }
+
+    public function getTeamId(): string
+    {
+        return $this->teamId();
+    }
+
+    public function getChannelId(): string
+    {
+        return $this->channelId();
+    }
+
+    public function getThreadId(): string
+    {
+        return $this->threadId();
+    }
+
+    public function getSummary(): ?string
+    {
+        return $this->summary();
+    }
+
+    public function getLastActivityAt(): \DateTimeImmutable
+    {
+        return $this->lastActivityAt();
+    }
+
+    /**
+     * @return Collection<int, AgentRun>
+     */
+    public function getRuns(): Collection
+    {
+        return $this->runs();
+    }
+
+    public function getInputTokens(): int
+    {
+        return $this->inputTokens();
+    }
+
+    public function getOutputTokens(): int
+    {
+        return $this->outputTokens();
+    }
+
+    public function getTotalTokens(): int
+    {
+        return $this->totalTokens();
+    }
+
+    #[\Override]
+    public function __toString(): string
+    {
+        return sprintf('Session #%s (%s)', $this->id ?? 'new', $this->platform);
+    }
+
     public function touch(\DateTimeImmutable $now): void
     {
         $this->lastActivityAt = $now;

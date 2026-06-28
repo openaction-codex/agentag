@@ -227,6 +227,147 @@ class AgentRun
         return $this->totalTokens;
     }
 
+    public function getId(): ?int
+    {
+        return $this->id();
+    }
+
+    public function getSession(): ChatSession
+    {
+        return $this->session();
+    }
+
+    public function getStatus(): string
+    {
+        return $this->status();
+    }
+
+    public function getCreatedAt(): \DateTimeImmutable
+    {
+        return $this->createdAt();
+    }
+
+    public function getInputSummary(): ?string
+    {
+        return $this->inputSummary();
+    }
+
+    public function getContextSnapshot(): ?string
+    {
+        return $this->contextSnapshot();
+    }
+
+    public function getOutputSummary(): ?string
+    {
+        return $this->outputSummary();
+    }
+
+    public function getWorkflowName(): ?string
+    {
+        return $this->workflowName();
+    }
+
+    public function getWorkflowVersion(): ?string
+    {
+        return $this->workflowVersion();
+    }
+
+    public function getWorkflowRevision(): ?string
+    {
+        return $this->workflowRevision();
+    }
+
+    public function getSourceEventId(): ?string
+    {
+        return $this->sourceEventId();
+    }
+
+    public function getRequesterId(): ?string
+    {
+        return $this->requesterId();
+    }
+
+    public function getWorkspacePath(): ?string
+    {
+        return $this->workspacePath();
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function getArtifacts(): array
+    {
+        return $this->artifacts();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getRepositoryClones(): array
+    {
+        return $this->repositoryClones();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getRepositoryBaseRefs(): array
+    {
+        return $this->repositoryBaseRefs();
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function getRepositoryBranches(): array
+    {
+        return $this->repositoryBranches();
+    }
+
+    public function getWorkspaceCleanupState(): string
+    {
+        return $this->workspaceCleanupState();
+    }
+
+    /**
+     * @return Collection<int, RunEvent>
+     */
+    public function getEvents(): Collection
+    {
+        return $this->events();
+    }
+
+    public function getLogSummary(): ?string
+    {
+        return $this->logSummary();
+    }
+
+    public function getExitCode(): ?int
+    {
+        return $this->exitCode();
+    }
+
+    public function getInputTokens(): ?int
+    {
+        return $this->inputTokens();
+    }
+
+    public function getOutputTokens(): ?int
+    {
+        return $this->outputTokens();
+    }
+
+    public function getTotalTokens(): ?int
+    {
+        return $this->totalTokens();
+    }
+
+    #[\Override]
+    public function __toString(): string
+    {
+        return sprintf('Run #%s (%s)', $this->id ?? 'new', $this->status);
+    }
+
     /**
      * @param list<string> $artifacts
      */
