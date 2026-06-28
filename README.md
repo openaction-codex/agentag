@@ -109,6 +109,27 @@ sensitivity_policy: confirm-sensitive
 
 After the global tag, users can select workflows explicitly with `workflow:developer` or `/developer`. If no explicit workflow is given, AgentTag selects by workflow name/triggers, then by `default: true`, then by a single configured workflow. Unknown explicit workflows return a concise message with available options.
 
+Product workflows should keep their functional-spec instructions and output template in the workflow YAML, for example:
+
+```yaml
+name: product
+version: v1
+triggers:
+    - spec
+instructions: |
+    Draft a functional spec and user-story breakdown from the provided context.
+output_template: |
+    ## Problem
+    ## Goals
+    ## User stories
+    ## Acceptance criteria
+    ## Open questions
+tools:
+    - linear
+```
+
+AgentTag packages inline text, thread context, optional cloned codebase context, and optional Linear issue identifiers into the runner prompt. Creating Linear comments, issues, and subissues is treated as non-sensitive by default. Appending to an issue description is non-sensitive; replacing existing issue content requires confirmation.
+
 Tool definitions live under `AGENTAG_WORKFLOWS_PATH/tools/*.yaml` so the operator can version them with workflows:
 
 ```yaml
