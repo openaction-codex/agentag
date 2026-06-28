@@ -1,0 +1,37 @@
+name: CI
+
+on:
+    push:
+        branches:
+            - main
+    pull_request:
+
+jobs:
+    checks:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Setup PHP
+              uses: shivammathur/setup-php@v2
+              with:
+                  php-version: '8.4'
+                  extensions: ctype, iconv, pdo_pgsql
+                  coverage: none
+
+            - name: Validate Composer
+              run: composer validate --strict
+
+            - name: Install dependencies
+              run: composer install --prefer-dist --no-progress --no-interaction
+
+            - name: Check coding style
+              run: composer cs-check
+
+            - name: Run phpstan
+              run: composer phpstan
+
+            - name: Run PHPUnit
+              run: composer test
