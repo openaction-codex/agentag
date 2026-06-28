@@ -130,6 +130,28 @@ tools:
 
 AgentTag packages inline text, thread context, optional cloned codebase context, and optional Linear issue identifiers into the runner prompt. Creating Linear comments, issues, and subissues is treated as non-sensitive by default. Appending to an issue description is non-sensitive; replacing existing issue content requires confirmation.
 
+Developer workflows use the same external-template model. Their `output_template` must include these sections so implementation plans stay consistent without hard-coding the template in AgentTag:
+
+```yaml
+name: developer
+version: v1
+triggers:
+    - implement
+instructions: |
+    Generate an implementation-grade technical spec from the source functional spec.
+output_template: |
+    ## Context
+    ## Data model
+    ## Services
+    ## APIs
+    ## Execution flow
+    ## Security
+    ## Tests
+    ## Migration/deployment
+    ## Risks
+    ## Rollout
+```
+
 Tool definitions live under `AGENTAG_WORKFLOWS_PATH/tools/*.yaml` so the operator can version them with workflows:
 
 ```yaml
