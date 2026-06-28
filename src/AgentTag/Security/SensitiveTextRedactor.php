@@ -17,9 +17,20 @@ final readonly class SensitiveTextRedactor
         '/-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----/s' => '[REDACTED_PRIVATE_KEY]',
     ];
 
+    /**
+     * @var list<string>
+     */
+    private array $customPatterns;
+
+    public function __construct(string $customPatterns = '')
+    {
+        $this->customPatterns = $this->parseCustomPatterns($customPatterns);
+    }
+
     public function redact(string $text): string
     {
         $text = $this->redactKnownPatterns($text);
+        $text = $this->redactCustomPatterns($text);
 
         $redacted = preg_replace_callback(
             self::SECRET_ASSIGNMENT_PATTERN,
@@ -33,7 +44,7 @@ final readonly class SensitiveTextRedactor
 
         $text = $redacted ?? $text;
 
-        return $this->redactKnownPatterns($text);
+        return $this->redactCustomPatterns($this->redactKnownPatterns($text));
     }
 
     private function redactKnownPatterns(string $text): string
@@ -44,6 +55,80 @@ final readonly class SensitiveTextRedactor
         }
 
         return $text;
+    }
+
+    private function redactCustomPatterns(string $text): string
+    {
+        foreach ($this->customPatterns as $pattern) {
+            $redacted = preg_replace($pattern, '[REDACTED]', $text);
+            $text = $redacted ?? $text;
+        }
+
+        return $text;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parseCustomPatterns(string $customPatterns): array
+    {
+        if ('' === trim($customPatterns)) {
+            return [];
+        }
+
+        $patterns = [];
+        foreach ($this->patternStrings($customPatterns) as $pattern) {
+            $pattern = trim($pattern);
+            if ('' === $pattern) {
+                continue;
+            }
+
+            $this->assertValidPattern($pattern);
+            $patterns[] = $pattern;
+        }
+
+        return $patterns;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function patternStrings(string $customPatterns): array
+    {
+        $customPatterns = trim($customPatterns);
+        if (str_starts_with($customPatterns, '[')) {
+            $decoded = json_decode($customPatterns, true);
+            if (!is_array($decoded)) {
+                throw new \InvalidArgumentException('AgentTag redaction patterns JSON must decode to a list of strings.');
+            }
+
+            $patterns = [];
+            foreach ($decoded as $pattern) {
+                if (!is_string($pattern)) {
+                    throw new \InvalidArgumentException('AgentTag redaction patterns JSON must contain only strings.');
+                }
+
+                $patterns[] = $pattern;
+            }
+
+            return $patterns;
+        }
+
+        return preg_split('/\R+/', $customPatterns) ?: [];
+    }
+
+    private function assertValidPattern(string $pattern): void
+    {
+        set_error_handler(static fn (): bool => true);
+        try {
+            $isValid = false !== preg_match($pattern, '');
+        } finally {
+            restore_error_handler();
+        }
+
+        if (!$isValid) {
+            throw new \InvalidArgumentException(sprintf('Invalid AgentTag redaction pattern "%s".', $pattern));
+        }
     }
 
     /**

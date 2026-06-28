@@ -73,14 +73,27 @@ final readonly class MattermostInteractionHandler
 
         $workflow = $selection->workflow();
         $session = $this->sessionMapper->map($event);
-        $run = $this->sessionStore->recordRun(
-            $session,
-            sprintf('Mattermost message %s from user %s.', $event->eventId(), $event->userId()),
-            $this->threadContextProvider->contextFor($event),
-            $workflow,
-            $event->eventId(),
-            $event->userId(),
-        );
+        try {
+            $run = $this->sessionStore->recordRun(
+                $session,
+                sprintf('Mattermost message %s from user %s.', $event->eventId(), $event->userId()),
+                $this->threadContextProvider->contextFor($event),
+                $workflow,
+                $event->eventId(),
+                $event->userId(),
+            );
+        } catch (\InvalidArgumentException $exception) {
+            $message = $exception->getMessage();
+            $this->notifier->showTyping($event);
+            $this->notifier->postProgress($event, $message);
+            $this->logger?->warning('Rejected Mattermost run during configuration validation.', [
+                'event_id' => $event->eventId(),
+                'workflow' => $workflow->name(),
+                'error' => $message,
+            ]);
+
+            return MattermostInteractionResult::handled($message);
+        }
 
         $message = sprintf(
             'Accepted workflow `%s`. I will continue this Mattermost thread as session `%s`.',

@@ -73,14 +73,27 @@ final readonly class SlackInteractionHandler
 
         $workflow = $selection->workflow();
         $session = $this->sessionMapper->map($event);
-        $run = $this->sessionStore->recordRun(
-            $session,
-            sprintf('Slack event %s from user %s.', $event->eventId(), $event->userId()),
-            $this->threadContextProvider->contextFor($event),
-            $workflow,
-            $event->eventId(),
-            $event->userId(),
-        );
+        try {
+            $run = $this->sessionStore->recordRun(
+                $session,
+                sprintf('Slack event %s from user %s.', $event->eventId(), $event->userId()),
+                $this->threadContextProvider->contextFor($event),
+                $workflow,
+                $event->eventId(),
+                $event->userId(),
+            );
+        } catch (\InvalidArgumentException $exception) {
+            $message = $exception->getMessage();
+            $this->notifier->showTyping($event);
+            $this->notifier->postProgress($event, $message);
+            $this->logger?->warning('Rejected Slack run during configuration validation.', [
+                'event_id' => $event->eventId(),
+                'workflow' => $workflow->name(),
+                'error' => $message,
+            ]);
+
+            return SlackInteractionResult::handled($message);
+        }
 
         $message = sprintf(
             'Accepted workflow `%s`. I will continue this Slack thread as session `%s`.',

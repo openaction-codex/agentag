@@ -72,6 +72,25 @@ final class MattermostInteractionHandlerTest extends TestCase
         self::assertSame([], $sessionStore->sessionKeys);
     }
 
+    public function testItReturnsConfigurationErrorsInChat(): void
+    {
+        $notifier = new TraceableMattermostNotifier();
+        $handler = new MattermostInteractionHandler(
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
+            new MattermostSessionMapper(),
+            new InMemoryInboundEventIdempotencyStore(),
+            $notifier,
+            new FailingChatSessionStore('Unknown tool `missing` requested by workflow `developer`.'),
+            new FixedMattermostThreadContextProvider(),
+            new FixedWorkflowSelector(WorkflowSelection::selected($this->workflow())),
+        );
+
+        $result = $handler->handle($this->event());
+
+        self::assertTrue($result->isHandled());
+        self::assertSame(['Unknown tool `missing` requested by workflow `developer`.'], $notifier->progressMessages);
+    }
+
     public function testItIgnoresMessagesWithoutTheConfiguredMention(): void
     {
         $notifier = new TraceableMattermostNotifier();
@@ -165,6 +184,25 @@ final class TraceableChatSessionStore implements ChatSessionStore
             'accepted',
             new \DateTimeImmutable(),
         );
+    }
+}
+
+final readonly class FailingChatSessionStore implements ChatSessionStore
+{
+    public function __construct(private string $message)
+    {
+    }
+
+    #[\Override]
+    public function recordRun(
+        ChatSessionReference $reference,
+        string $inputSummary,
+        ChatThreadContext $threadContext,
+        WorkflowDefinition $workflow,
+        ?string $sourceEventId = null,
+        ?string $requesterId = null,
+    ): AgentRun {
+        throw new \InvalidArgumentException($this->message);
     }
 }
 

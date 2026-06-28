@@ -101,6 +101,29 @@ YAML);
         self::assertSame('git', $tools[0]->name());
     }
 
+    public function testItRejectsUnknownWorkflowTools(): void
+    {
+        $workflow = WorkflowDefinition::fromArray([
+            'name' => 'developer',
+            'tools' => ['missing'],
+        ], $this->workflowDirectory.'/developer.yaml');
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Unknown tool `missing` requested by workflow `developer`. Available tools: `codex`, `deploy`, `git`.');
+
+        $this->catalog()->forWorkflow($workflow);
+    }
+
+    public function testItAllowsCodexAsBuiltInRunnerTool(): void
+    {
+        $workflow = WorkflowDefinition::fromArray([
+            'name' => 'developer',
+            'tools' => ['codex'],
+        ], $this->workflowDirectory.'/developer.yaml');
+
+        self::assertSame([], $this->catalog()->forWorkflow($workflow));
+    }
+
     public function testPolicyRequiresConfirmationOnlyForSensitiveToolsByDefault(): void
     {
         $policy = new ToolPolicy();

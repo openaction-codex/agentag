@@ -23,4 +23,26 @@ final class SensitiveTextRedactorTest extends TestCase
         self::assertStringNotContainsString('abcdefghijklmnop', $redacted);
         self::assertStringNotContainsString('ghp_abcdefghijklmnopqrstuvwxyz', $redacted);
     }
+
+    public function testItUsesConfiguredSensitivePatterns(): void
+    {
+        $redactor = new SensitiveTextRedactor('/project-[0-9]{4}/');
+
+        self::assertSame('internal [REDACTED]', $redactor->redact('internal project-1234'));
+    }
+
+    public function testItAcceptsConfiguredPatternsAsJsonList(): void
+    {
+        $redactor = new SensitiveTextRedactor('["/ticket-[0-9]{1,3}/"]');
+
+        self::assertSame('internal [REDACTED]', $redactor->redact('internal ticket-123'));
+    }
+
+    public function testItRejectsInvalidConfiguredPatterns(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Invalid AgentTag redaction pattern');
+
+        new SensitiveTextRedactor('/unterminated');
+    }
 }

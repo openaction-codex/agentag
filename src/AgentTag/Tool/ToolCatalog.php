@@ -8,6 +8,8 @@ use Symfony\Component\Yaml\Yaml;
 
 final readonly class ToolCatalog
 {
+    private const BUILT_IN_TOOL_NAMES = ['codex'];
+
     public function __construct(private AgentTagSettings $settings)
     {
     }
@@ -45,10 +47,18 @@ final readonly class ToolCatalog
     {
         $requestedToolNames = array_fill_keys($workflow->tools(), true);
         $tools = [];
+        $knownToolNames = array_fill_keys(self::BUILT_IN_TOOL_NAMES, true);
 
         foreach ($this->all() as $tool) {
+            $knownToolNames[$tool->name()] = true;
             if (isset($requestedToolNames[$tool->name()]) && $tool->allowsWorkflow($workflow->name())) {
                 $tools[] = $tool;
+            }
+        }
+
+        foreach (array_keys($requestedToolNames) as $requestedToolName) {
+            if (!isset($knownToolNames[$requestedToolName])) {
+                throw new \InvalidArgumentException(sprintf('Unknown tool `%s` requested by workflow `%s`. Available tools: %s.', $requestedToolName, $workflow->name(), $this->availableToolList(array_keys($knownToolNames))));
             }
         }
 
@@ -83,5 +93,15 @@ final readonly class ToolCatalog
         }
 
         return $normalized;
+    }
+
+    /**
+     * @param list<string> $toolNames
+     */
+    private function availableToolList(array $toolNames): string
+    {
+        sort($toolNames);
+
+        return '`'.implode('`, `', $toolNames).'`';
     }
 }

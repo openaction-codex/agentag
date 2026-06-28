@@ -28,6 +28,10 @@ services:
             $workflowsPath: '%env(resolve:AGENTAG_WORKFLOWS_PATH)%'
             $repositoryUrlsCsv: '%env(string:AGENTAG_REPOSITORY_URLS)%'
 
+    App\AgentTag\Security\SensitiveTextRedactor:
+        arguments:
+            $customPatterns: '%env(string:AGENTAG_REDACTION_PATTERNS)%'
+
     App\AgentTag\Workspace\WorkspaceLayout:
         arguments:
             $workspacePath: '%env(resolve:AGENTAG_WORKSPACE_PATH)%'

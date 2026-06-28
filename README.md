@@ -46,6 +46,7 @@ AGENTAG_WORKSPACE_PATH=/srv/agentag/workspace
 AGENTAG_WORKFLOWS_PATH=/srv/agentag/workspace/workflows
 AGENTAG_REPOSITORY_URLS=git@github.com:example/api.git,git@github.com:example/web.git
 AGENTAG_CONTEXT_MAX_CHARS=12000
+AGENTAG_REDACTION_PATTERNS=
 AGENTAG_ADMIN_USER=admin
 AGENTAG_ADMIN_PASSWORD=change-this
 
@@ -314,6 +315,8 @@ Global memory is explicit-only:
 - `@Codex delete memory <id>` deletes a global memory by ID. Run and session history is not deleted in v1.
 - Sensitive values are redacted or refused before storage.
 - Stored global memories are added to later run context separately from thread summaries and prior run metadata.
+
+Sensitive values are redacted from persisted context, runner output, run events, logs, and memory. `AGENTAG_REDACTION_PATTERNS` can add newline-separated PCRE patterns or a JSON array of PCRE patterns for organization-specific values; invalid patterns fail configuration early. Routes under `/admin` require HTTP Basic authentication using `AGENTAG_ADMIN_USER` and `AGENTAG_ADMIN_PASSWORD`.
 
 ## Review Discipline
 
