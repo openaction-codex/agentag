@@ -223,9 +223,10 @@ Run the quality checks:
 composer check
 ```
 
-Individual checks:
+This is the same quality gate run by GitHub Actions on pushes and pull requests. Individual checks:
 
 ```bash
+composer validate --strict
 composer test
 composer phpstan
 composer cs-check
