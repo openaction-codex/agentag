@@ -99,6 +99,15 @@ composer phpstan
 composer cs-check
 ```
 
+Useful AgentTag console commands:
+
+```bash
+bin/console agentag:config:validate
+bin/console agentag:workflows:list
+bin/console agentag:repositories:list
+bin/console agentag:tools:list
+```
+
 ## VPS Setup
 
 A practical VPS deployment is:

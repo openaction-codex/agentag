@@ -21,6 +21,13 @@ services:
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
+    App\AgentTag\Configuration\AgentTagSettings:
+        arguments:
+            $tag: '%env(string:AGENTAG_TAG)%'
+            $workspacePath: '%env(string:AGENTAG_WORKSPACE_PATH)%'
+            $workflowsPath: '%env(string:AGENTAG_WORKFLOWS_PATH)%'
+            $repositoryUrlsCsv: '%env(string:AGENTAG_REPOSITORY_URLS)%'
+
     App\AgentTag\Workspace\WorkspaceLayout:
         arguments:
             $workspacePath: '%env(string:AGENTAG_WORKSPACE_PATH)%'
