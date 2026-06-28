@@ -2,11 +2,11 @@
 
 namespace App\Tests\AgentTag\Mattermost;
 
+use App\AgentTag\Chat\ConfiguredTagMentionDetector;
+use App\AgentTag\Chat\InMemoryInboundEventIdempotencyStore;
 use App\AgentTag\Configuration\AgentTagSettings;
-use App\AgentTag\Mattermost\InMemoryInboundEventIdempotencyStore;
 use App\AgentTag\Mattermost\MattermostInboundEvent;
 use App\AgentTag\Mattermost\MattermostInteractionHandler;
-use App\AgentTag\Mattermost\MattermostMentionDetector;
 use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostSessionMapper;
 use PHPUnit\Framework\TestCase;
@@ -17,7 +17,7 @@ final class MattermostInteractionHandlerTest extends TestCase
     {
         $notifier = new TraceableMattermostNotifier();
         $handler = new MattermostInteractionHandler(
-            new MattermostMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
             new MattermostSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,
@@ -36,7 +36,7 @@ final class MattermostInteractionHandlerTest extends TestCase
     {
         $notifier = new TraceableMattermostNotifier();
         $handler = new MattermostInteractionHandler(
-            new MattermostMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
             new MattermostSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,

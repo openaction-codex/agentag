@@ -2,10 +2,13 @@
 
 namespace App\AgentTag\Mattermost;
 
+use App\AgentTag\Chat\ConfiguredTagMentionDetector;
+use App\AgentTag\Chat\InboundEventIdempotencyStore;
+
 final readonly class MattermostInteractionHandler
 {
     public function __construct(
-        private MattermostMentionDetector $mentionDetector,
+        private ConfiguredTagMentionDetector $mentionDetector,
         private MattermostSessionMapper $sessionMapper,
         private InboundEventIdempotencyStore $idempotencyStore,
         private MattermostNotifier $notifier,
@@ -18,7 +21,7 @@ final readonly class MattermostInteractionHandler
             return MattermostInteractionResult::ignored();
         }
 
-        if (!$this->idempotencyStore->remember($event->eventId())) {
+        if (!$this->idempotencyStore->remember('mattermost:'.$event->eventId())) {
             return MattermostInteractionResult::duplicate();
         }
 

@@ -40,5 +40,13 @@ services:
     App\AgentTag\Mattermost\MattermostNotifier:
         alias: App\AgentTag\Mattermost\NullMattermostNotifier
 
-    App\AgentTag\Mattermost\InboundEventIdempotencyStore:
-        alias: App\AgentTag\Mattermost\InMemoryInboundEventIdempotencyStore
+    App\AgentTag\Chat\InboundEventIdempotencyStore:
+        alias: App\AgentTag\Chat\InMemoryInboundEventIdempotencyStore
+
+    App\AgentTag\Slack\SlackSettings:
+        arguments:
+            $enabled: '%env(bool:SLACK_ENABLED)%'
+            $verificationToken: '%env(string:SLACK_VERIFICATION_TOKEN)%'
+
+    App\AgentTag\Slack\SlackNotifier:
+        alias: App\AgentTag\Slack\NullSlackNotifier

@@ -1,10 +1,10 @@
 <?php
 
-namespace App\AgentTag\Mattermost;
+namespace App\AgentTag\Chat;
 
 use App\AgentTag\Configuration\AgentTagSettings;
 
-final readonly class MattermostMentionDetector
+final readonly class ConfiguredTagMentionDetector
 {
     public function __construct(private AgentTagSettings $settings)
     {

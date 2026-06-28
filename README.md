@@ -141,6 +141,14 @@ POST /integrations/mattermost/webhook
 
 Configure `MATTERMOST_WEBHOOK_TOKEN` when using a Mattermost outgoing webhook token. Leave it empty only for local development.
 
+Slack support is intentionally thin until the Mattermost path is complete. It can be disabled with `SLACK_ENABLED=0`. The initial Slack events endpoint is:
+
+```text
+POST /integrations/slack/events
+```
+
+Configure `SLACK_VERIFICATION_TOKEN` if you use Slack's verification token flow. Leave it empty only for local development.
+
 Global memory is explicit-only:
 
 - The agent must ask before adding memory unless the user explicitly asks it to remember something.

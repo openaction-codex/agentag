@@ -1,6 +1,6 @@
 <?php
 
-namespace App\AgentTag\Mattermost;
+namespace App\AgentTag\Chat;
 
 final class InMemoryInboundEventIdempotencyStore implements InboundEventIdempotencyStore
 {
