@@ -156,6 +156,8 @@ Implementation runs use the configured repository context and Codex runner. The 
 
 Opening a new pull request is non-sensitive by default. Pushing a normal work branch is also non-sensitive unless your workflow policy says otherwise. Pushing to main/protected branches, force-pushing, deleting data, overwriting data, and deployments require confirmation.
 
+Approval requests are created only for sensitive or destructive/overwrite actions. The prompt shown in chat includes the action, target system, workflow, requester, and expected effect. Approval decisions are stored with status (`approved`, `canceled`, `expired`, or `unauthorized`), approver identity when available, and timestamp. In v1 there is no Mattermost role model, so any non-empty chat user identity can approve; blank or unavailable identities are treated as unauthorized.
+
 Tool definitions live under `AGENTAG_WORKFLOWS_PATH/tools/*.yaml` so the operator can version them with workflows:
 
 ```yaml
