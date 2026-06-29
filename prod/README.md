@@ -116,11 +116,12 @@ chown root:www-data /srv/agentag/app/.env.local
 chmod 0640 /srv/agentag/app/.env.local
 ```
 
-Install PHP dependencies. The `.env.local` file is already present, so Symfony auto-scripts use the production environment values.
+Install PHP dependencies. Disable Composer auto-scripts here so `cache:clear` is not run as root and does not create a root-owned Symfony cache.
 
 ```bash
 cd /srv/agentag/app
-APP_ENV=prod APP_DEBUG=0 composer install --no-dev --optimize-autoloader
+APP_ENV=prod APP_DEBUG=0 composer install --no-dev --optimize-autoloader --no-scripts
+APP_ENV=prod APP_DEBUG=0 php8.4 bin/console assets:install public --no-interaction
 ```
 
 Set write permissions. PHP-FPM needs write access for Symfony cache/logs and for initial session workspace preparation. Codex itself is launched only by the root worker and can write anywhere root can write.
@@ -189,15 +190,15 @@ Run database migrations against your existing PostgreSQL service:
 
 ```bash
 cd /srv/agentag/app
-APP_ENV=prod APP_DEBUG=0 php8.4 bin/console doctrine:migrations:migrate --no-interaction
+runuser -u www-data -- env APP_ENV=prod APP_DEBUG=0 php8.4 bin/console doctrine:migrations:migrate --no-interaction
 ```
 
 Warm Symfony cache and validate AgentTag configuration:
 
 ```bash
-APP_ENV=prod APP_DEBUG=0 php8.4 bin/console cache:clear
-APP_ENV=prod APP_DEBUG=0 php8.4 bin/console agentag:config:validate
-APP_ENV=prod APP_DEBUG=0 php8.4 bin/console agentag:workspace:inspect
+runuser -u www-data -- env APP_ENV=prod APP_DEBUG=0 php8.4 bin/console cache:clear
+runuser -u www-data -- env APP_ENV=prod APP_DEBUG=0 php8.4 bin/console agentag:config:validate
+runuser -u www-data -- env APP_ENV=prod APP_DEBUG=0 php8.4 bin/console agentag:workspace:inspect
 ```
 
 Start services:
@@ -252,9 +253,11 @@ Pull code and update dependencies:
 ```bash
 cd /srv/agentag/app
 git pull --ff-only
-APP_ENV=prod APP_DEBUG=0 composer install --no-dev --optimize-autoloader
-APP_ENV=prod APP_DEBUG=0 php8.4 bin/console doctrine:migrations:migrate --no-interaction
-APP_ENV=prod APP_DEBUG=0 php8.4 bin/console cache:clear
+APP_ENV=prod APP_DEBUG=0 composer install --no-dev --optimize-autoloader --no-scripts
+APP_ENV=prod APP_DEBUG=0 php8.4 bin/console assets:install public --no-interaction
+chown -R www-data:www-data /srv/agentag/app/var /srv/agentag/runs /srv/agentag/artifacts
+runuser -u www-data -- env APP_ENV=prod APP_DEBUG=0 php8.4 bin/console doctrine:migrations:migrate --no-interaction
+runuser -u www-data -- env APP_ENV=prod APP_DEBUG=0 php8.4 bin/console cache:clear
 ```
 
 Restart services so PHP-FPM OPcache and the worker see the new code:
