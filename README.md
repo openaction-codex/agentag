@@ -228,64 +228,9 @@ POST /integrations/slack/events
 
 Configure `SLACK_VERIFICATION_TOKEN` if you use Slack's verification token flow. Leave it empty only for local development.
 
-## VPS Setup
+## Production Deployment
 
-A practical deployment:
-
-1. Install PHP 8.4, Composer, PostgreSQL, Git, OpenSSH client tools, Codex CLI, and either Symfony CLI, PHP-FPM, or another Symfony-capable process manager.
-2. Create a Unix user such as `agentag`.
-3. Clone this repository to `/srv/agentag/app`.
-4. Create `/srv/agentag/workspace` and place your `AGENTS.md`, skills, Codex plugins/MCP config, and shared docs there.
-5. Configure SSH deploy keys or an SSH agent for every repository listed in `AGENTAG_REPOSITORY_URLS`.
-6. Configure `/srv/agentag/app/.env.local` or real environment variables with `APP_SECRET`, `DATABASE_URL`, `MESSENGER_TRANSPORT_DSN`, `AGENTAG_*`, Mattermost credentials, and optional Slack/Linear/GitHub tokens.
-7. Run `composer install --no-dev --optimize-autoloader`.
-8. Run migrations: `APP_ENV=prod bin/console doctrine:migrations:migrate --no-interaction`.
-9. Warm cache if desired: `APP_ENV=prod APP_DEBUG=0 bin/console cache:clear`.
-10. Run the web process behind nginx, Caddy, Apache, PHP-FPM, or Symfony CLI.
-11. Run at least one worker: `APP_ENV=prod bin/console messenger:consume async --time-limit=3600`.
-12. Point liveness checks at `/health` and readiness checks at `/ready`.
-
-Minimal web systemd unit:
-
-```ini
-[Unit]
-Description=AgentTag web process
-After=network.target postgresql.service
-
-[Service]
-WorkingDirectory=/srv/agentag/app
-Environment=APP_ENV=prod
-Environment=APP_DEBUG=0
-EnvironmentFile=/srv/agentag/app/.env.local
-ExecStart=/usr/bin/symfony server:start --no-tls --port=8080
-Restart=always
-User=agentag
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Minimal worker unit:
-
-```ini
-[Unit]
-Description=AgentTag async worker
-After=network.target postgresql.service
-
-[Service]
-WorkingDirectory=/srv/agentag/app
-Environment=APP_ENV=prod
-Environment=APP_DEBUG=0
-EnvironmentFile=/srv/agentag/app/.env.local
-ExecStart=/usr/bin/php bin/console messenger:consume async --time-limit=3600
-Restart=always
-User=agentag
-
-[Install]
-WantedBy=multi-user.target
-```
-
-For deploys, pull or replace the app release, run `composer install --no-dev --optimize-autoloader`, run migrations, update the workspace template manually if needed, and restart the web and worker services. Use `agentag:workspace:cleanup --older-than-days=<days>` in dry-run mode first, then with `--force` to delete old isolated run/artifact directories. Cleanup never deletes run, session, memory, approval, or audit history.
+Host-based nginx + PHP-FPM deployment docs and config live in [prod/README.md](prod/README.md). That guide targets Ubuntu 24.04, runs outside Docker, assumes PostgreSQL already exists, and runs the Messenger worker as root so Codex executes as root on the host.
 
 ## Admin Panel
 
