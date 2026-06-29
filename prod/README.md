@@ -9,7 +9,7 @@ The nginx and PHP-FPM settings are adapted from the `openaction/docker-php` PHP 
 - `prod/php-fpm/agentag.conf` -> `/etc/php/8.4/fpm/pool.d/agentag.conf`
 - `prod/systemd/agentag-worker.service` -> `/etc/systemd/system/agentag-worker.service`
 
-PHP-FPM runs web requests as `www-data`. The Messenger worker runs as `root`, so `codex exec` also runs as root on the host.
+PHP-FPM runs web requests as `www-data` and only enqueues work. The Messenger worker runs as `root` with `HOME=/root` and `CODEX_HOME=/root/.codex`; it is the only production process that launches `codex exec`, so Codex and every command Codex starts run as root on the host. Keep `MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0` in production; using an in-memory/synchronous transport would execute runs inside PHP-FPM instead.
 
 ## 1. Install System Packages
 
@@ -123,7 +123,7 @@ cd /srv/agentag/app
 APP_ENV=prod APP_DEBUG=0 composer install --no-dev --optimize-autoloader
 ```
 
-Set write permissions. PHP-FPM needs write access for Symfony cache/logs and for session workspace preparation. The worker runs as root and can also write these paths.
+Set write permissions. PHP-FPM needs write access for Symfony cache/logs and for initial session workspace preparation. Codex itself is launched only by the root worker and can write anywhere root can write.
 
 ```bash
 mkdir -p /srv/agentag/app/var
@@ -216,6 +216,7 @@ Check service state and HTTP endpoints:
 systemctl status php8.4-fpm --no-pager
 systemctl status nginx --no-pager
 systemctl status agentag-worker --no-pager
+systemctl show agentag-worker -p User -p Group -p Environment
 curl -i http://YOUR_DOMAIN_HERE/health
 curl -i http://YOUR_DOMAIN_HERE/ready
 ```

@@ -217,7 +217,7 @@ Configure `SLACK_VERIFICATION_TOKEN` if you use Slack's verification token flow.
 
 ## Production Deployment
 
-Host-based nginx + PHP-FPM deployment docs and config live in [prod/README.md](prod/README.md). That guide targets Ubuntu 24.04, runs outside Docker, assumes PostgreSQL already exists, and runs the Messenger worker as root so Codex executes as root on the host.
+Host-based nginx + PHP-FPM deployment docs and config live in [prod/README.md](prod/README.md). That guide targets Ubuntu 24.04, runs outside Docker, assumes PostgreSQL already exists, and runs the Messenger worker as root so Codex and its child commands execute as root on the host.
 
 ## Admin Panel
 
