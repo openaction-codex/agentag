@@ -2,7 +2,7 @@
 
 AgentTag is a self-hosted Symfony bot for Mattermost first, with thinner Slack support. It listens to one configured tag, `@Codex` by default, and runs one generic Codex-powered agent from a workspace template that you control.
 
-The application code stays generic. Project knowledge, reusable skills, tool definitions, and operating instructions belong in the workspace template, usually in files such as `AGENTS.md`, `skills/`, `docs/`, and `tools/*.yaml`.
+The application code stays generic. Project knowledge, reusable skills, Codex plugins, MCP configuration, and operating instructions belong in the workspace template, usually in files such as `AGENTS.md`, `skills/`, `.codex-plugin/`, and shared docs.
 
 ## Status
 
@@ -16,7 +16,7 @@ The current foundation provides:
 - Codex CLI execution in full-access mode with streamed JSON progress events.
 - Mattermost typing indicators plus runner-generated progress/final messages.
 - Explicit-only global memories with list and delete by ID.
-- Linear tool instructions, approval requests for sensitive/destructive actions, and write audits.
+- Approval requests for sensitive/destructive actions.
 - Token usage storage on runs and sessions when the runner exposes usage.
 - Read-only EasyAdmin pages under `/admin` for usage/debug inspection.
 - PHPUnit, php-cs-fixer, phpstan, and GitHub Actions CI.
@@ -76,8 +76,8 @@ Recommended filesystem shape:
   workspace/                   # manually managed template
     AGENTS.md                  # generic agent instructions
     skills/                    # optional reusable skills
+    .codex-plugin/             # optional Codex plugin files
     docs/                      # optional shared knowledge
-    tools/*.yaml               # optional tool definitions
   runs/session-<hash>/         # copied template for one chat thread
     codebase/<repository-id>/  # per-session repository clones
   cache/repositories/          # optional git reference cache
@@ -96,40 +96,16 @@ Each session gets independent clones under:
 
 Working in one Mattermost thread therefore cannot mutate another thread's workspace. Cache mirrors under `/srv/agentag/cache/repositories` may speed up clones, but they are never used as active working copies.
 
-## Workspace Tools
+## Workspace Capabilities
 
-Tool definitions live under `AGENTAG_WORKSPACE_PATH/tools/*.yaml`.
+AgentTag does not define or parse a custom tool YAML format. Give Codex capabilities by placing normal Codex-readable material in the workspace template:
 
-```yaml
-name: git
-type: cli
-command: git
-arguments:
-    - status
-working_directory: codebase
-environment:
-    - GIT_SSH_COMMAND
-timeout_seconds: 120
-sensitivity: non_sensitive
-confirmation_policy: default
-sandbox: no_sandbox
-```
+- `AGENTS.md` for instructions, policy, and expected workflows.
+- `skills/` for reusable skills.
+- Codex plugins or MCP configuration, if you use them.
+- Shared docs or examples the agent should consult.
 
-`type` is `cli` or `mcp`. CLI tools define `command`; MCP tools define `server`. `sensitivity` is `non_sensitive`, `sensitive`, or `destructive`; sensitive and destructive actions require confirmation. Use `confirmation_policy: always` to force confirmation. `sandbox: no_sandbox` records that the tool is allowed to run with full host access.
-
-Linear access is provided through a configured tool named `linear`:
-
-```yaml
-name: linear
-type: mcp
-server: linear
-sensitivity: non_sensitive
-confirmation_policy: default
-```
-
-Creating Linear comments, issues, and subissues is non-sensitive by default. Appending to descriptions is non-sensitive. Replacing existing descriptions creates an approval request before execution. Linear write audits store source chat message ID, agent, requester, target issue, resulting issue identifiers, status, timestamp, and redacted failure summary.
-
-Opening a pull request or writing a Linear comment is not sensitive by itself. Pushing to main/protected branches, force-pushing, deleting data, overwriting data, and other destructive changes require confirmation.
+Opening a pull request or writing a Linear comment is not sensitive by itself. Pushing to main/protected branches, force-pushing, deleting data, overwriting data, and other destructive changes require confirmation; put the exact policy in `AGENTS.md` so Codex applies it while using your workspace-provided capabilities.
 
 ## Local Development
 
@@ -142,7 +118,7 @@ composer install
 Create a local workspace template:
 
 ```bash
-mkdir -p var/dev-workspace/tools
+mkdir -p var/dev-workspace
 cat > var/dev-workspace/AGENTS.md <<'EOF'
 Use the repository instructions. Keep Mattermost replies concise and answer in the user's language.
 EOF
@@ -179,7 +155,6 @@ Useful console commands:
 ```bash
 bin/console agentag:config:validate
 bin/console agentag:repositories:list
-bin/console agentag:tools:list
 bin/console agentag:runs:failed
 bin/console agentag:memories:list
 bin/console agentag:memories:delete <id>
@@ -260,7 +235,7 @@ A practical deployment:
 1. Install PHP 8.4, Composer, PostgreSQL, Git, OpenSSH client tools, Codex CLI, and either Symfony CLI, PHP-FPM, or another Symfony-capable process manager.
 2. Create a Unix user such as `agentag`.
 3. Clone this repository to `/srv/agentag/app`.
-4. Create `/srv/agentag/workspace` and place your `AGENTS.md`, skills, shared docs, and `tools/*.yaml` there.
+4. Create `/srv/agentag/workspace` and place your `AGENTS.md`, skills, Codex plugins/MCP config, and shared docs there.
 5. Configure SSH deploy keys or an SSH agent for every repository listed in `AGENTAG_REPOSITORY_URLS`.
 6. Configure `/srv/agentag/app/.env.local` or real environment variables with `APP_SECRET`, `DATABASE_URL`, `MESSENGER_TRANSPORT_DSN`, `AGENTAG_*`, Mattermost credentials, and optional Slack/Linear/GitHub tokens.
 7. Run `composer install --no-dev --optimize-autoloader`.
@@ -316,7 +291,7 @@ For deploys, pull or replace the app release, run `composer install --no-dev --o
 
 `/admin` is protected by in-memory HTTP Basic credentials from `AGENTAG_ADMIN_USER` and `AGENTAG_ADMIN_PASSWORD`.
 
-The panel is read-only and exposes sessions, runs, run events, approvals, global memories, and Linear write audits. Create, edit, delete, and batch delete actions are disabled in the UI and rejected by controllers. Use explicit chat commands or console commands for supported mutations such as deleting a memory by ID.
+The panel is read-only and exposes sessions, runs, run events, approvals, and global memories. Create, edit, delete, and batch delete actions are disabled in the UI and rejected by controllers. Use explicit chat commands or console commands for supported mutations such as deleting a memory by ID.
 
 ## Review Discipline
 

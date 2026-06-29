@@ -4,7 +4,6 @@ namespace App\AgentTag\Session;
 
 use App\AgentTag\Agent\AgentProfile;
 use App\AgentTag\Memory\GlobalMemoryService;
-use App\AgentTag\Tool\ToolDefinition;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use App\Entity\GlobalMemory;
@@ -21,15 +20,13 @@ final readonly class SessionContextSnapshotBuilder
     }
 
     /**
-     * @param list<AgentRun>       $priorRuns
-     * @param list<ToolDefinition> $tools
+     * @param list<AgentRun> $priorRuns
      */
     public function build(
         ChatSession $session,
         ChatThreadContext $threadContext,
         array $priorRuns,
         AgentProfile $agent,
-        array $tools,
     ): string {
         $sections = [
             sprintf('Session: %s', $session->sessionKey()),
@@ -40,7 +37,6 @@ final readonly class SessionContextSnapshotBuilder
             sprintf('Workspace revision: %s', $agent->workspaceRevision() ?? '(none)'),
             sprintf('Session workspace: %s', $session->workspacePath() ?? '(not prepared)'),
             sprintf('Session summary: %s', $session->summary() ?? '(none)'),
-            $this->formatTools($tools),
             $this->formatThreadMessages($threadContext),
             $this->formatPriorRuns($priorRuns),
             $this->formatGlobalMemories(),
@@ -48,31 +44,6 @@ final readonly class SessionContextSnapshotBuilder
         ];
 
         return $this->bound(implode("\n\n", $sections));
-    }
-
-    /**
-     * @param list<ToolDefinition> $tools
-     */
-    private function formatTools(array $tools): string
-    {
-        $lines = ['Available tools:'];
-
-        foreach ($tools as $tool) {
-            $lines[] = sprintf(
-                '- %s (%s, %s, confirmation=%s, sandbox=%s)',
-                $tool->name(),
-                $tool->type(),
-                $tool->sensitivity(),
-                $tool->confirmationPolicy(),
-                $tool->sandbox(),
-            );
-        }
-
-        if (1 === count($lines)) {
-            $lines[] = '- (none)';
-        }
-
-        return implode("\n", $lines);
     }
 
     private function formatThreadMessages(ChatThreadContext $threadContext): string

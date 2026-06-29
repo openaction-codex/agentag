@@ -7,7 +7,6 @@ use App\Entity\AgentRun;
 use App\Entity\ApprovalRequest;
 use App\Entity\ChatSession;
 use App\Entity\GlobalMemory;
-use App\Entity\LinearWriteAudit;
 use App\Entity\RunEvent;
 use App\Tests\RefreshDatabaseTrait;
 use Doctrine\ORM\EntityManagerInterface;
@@ -79,7 +78,6 @@ final class AdminPanelTest extends WebTestCase
         $memory = new GlobalMemory('Remember password=hunter2', $now, 'user-1', 'mattermost', 'thread', 'message');
         $event = new RunEvent($run, RunEvent::TYPE_PROGRESS_UPDATE, 'Progress password=hunter2', ['token' => 'secret123456789'], $now);
         $approval = new ApprovalRequest($run, 'force_push', 'git', 'agent', 'user-1', 'Force push password=hunter2', ActionSensitivity::DESTRUCTIVE, $now);
-        $linearAudit = LinearWriteAudit::failed('comment', 'message', 'agent', 'user-1', 'OPE-1', 'Linear failed password=hunter2', $now);
 
         $entityManager = $this->entityManager();
         $entityManager->persist($session);
@@ -87,7 +85,6 @@ final class AdminPanelTest extends WebTestCase
         $entityManager->persist($memory);
         $entityManager->persist($event);
         $entityManager->persist($approval);
-        $entityManager->persist($linearAudit);
         $entityManager->flush();
 
         $memoryId = $memory->id();

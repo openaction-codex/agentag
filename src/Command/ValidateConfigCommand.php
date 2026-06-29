@@ -4,7 +4,6 @@ namespace App\Command;
 
 use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Configuration\AgentTagSettings;
-use App\AgentTag\Tool\ToolCatalog;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -17,7 +16,6 @@ final class ValidateConfigCommand extends Command
     public function __construct(
         private readonly AgentTagSettings $settings,
         private readonly AgentProfileProvider $agentProfileProvider,
-        private readonly ToolCatalog $toolCatalog,
     ) {
         parent::__construct();
     }
@@ -38,7 +36,6 @@ final class ValidateConfigCommand extends Command
 
         try {
             $agent = $this->agentProfileProvider->profile();
-            $tools = $this->toolCatalog->all();
         } catch (\Throwable $exception) {
             $io->error($exception->getMessage());
 
@@ -46,9 +43,8 @@ final class ValidateConfigCommand extends Command
         }
 
         $io->success(sprintf(
-            'Configuration is valid. Generic agent `%s` is ready with %d tool(s).',
+            'Configuration is valid. Generic agent `%s` is ready.',
             $agent->name(),
-            count($tools),
         ));
 
         return Command::SUCCESS;

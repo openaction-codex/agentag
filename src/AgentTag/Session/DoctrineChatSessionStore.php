@@ -5,7 +5,6 @@ namespace App\AgentTag\Session;
 use App\AgentTag\Agent\AgentProfile;
 use App\AgentTag\Chat\ChatSessionReference;
 use App\AgentTag\Security\SensitiveTextRedactor;
-use App\AgentTag\Tool\ToolCatalog;
 use App\AgentTag\Workspace\WorkspaceLayout;
 use App\AgentTag\Workspace\WorkspaceTemplateCopier;
 use App\Entity\AgentRun;
@@ -19,7 +18,6 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         private EntityManagerInterface $entityManager,
         private SessionContextSnapshotBuilder $snapshotBuilder,
         private SensitiveTextRedactor $redactor,
-        private ToolCatalog $toolCatalog,
         private WorkspaceLayout $workspaceLayout,
         private WorkspaceTemplateCopier $workspaceTemplateCopier,
         private LoggerInterface $logger,
@@ -74,7 +72,6 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
             $threadContext,
             $priorRuns,
             $agent,
-            $this->toolCatalog->all(),
         );
 
         $run = new AgentRun(

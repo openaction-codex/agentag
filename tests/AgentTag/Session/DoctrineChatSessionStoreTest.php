@@ -72,8 +72,6 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         self::assertStringContainsString('Agent: agent', (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('Workspace template:', (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('Session workspace: '.$session->workspacePath(), (string) $runs[0]->contextSnapshot());
-        self::assertStringContainsString('Available tools:', (string) $runs[0]->contextSnapshot());
-        self::assertStringContainsString('git (cli, non_sensitive, confirmation=default, sandbox=no_sandbox)', (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('Thread messages:', (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('password=[REDACTED]', (string) $runs[0]->contextSnapshot());
         self::assertStringNotContainsString('hunter2', (string) $runs[0]->contextSnapshot());
@@ -126,23 +124,8 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
 
         $workspacePath = $projectDirectory.'/var/test-workspace';
         $this->removeDirectory($workspacePath);
-        mkdir($workspacePath.'/tools', 0777, true);
+        mkdir($workspacePath, 0777, true);
         file_put_contents($workspacePath.'/AGENTS.md', 'Use the shared workspace instructions.');
-
-        $toolDirectory = $workspacePath.'/tools';
-        if (!is_dir($toolDirectory)) {
-            mkdir($toolDirectory, 0777, true);
-        }
-
-        file_put_contents($toolDirectory.'/git.yaml', <<<'YAML'
-name: git
-type: cli
-command: git
-working_directory: codebase
-timeout_seconds: 120
-sensitivity: non_sensitive
-sandbox: no_sandbox
-YAML);
     }
 
     private function removeDirectory(string $path): void

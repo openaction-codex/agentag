@@ -87,7 +87,6 @@ final class DashboardController extends AbstractDashboardController
         yield MenuItem::linkTo(RunEventCrudController::class, 'Run events', 'fa fa-list');
         yield MenuItem::section('Audit');
         yield MenuItem::linkTo(ApprovalRequestCrudController::class, 'Approvals', 'fa fa-check-circle');
-        yield MenuItem::linkTo(LinearWriteAuditCrudController::class, 'Linear writes', 'fa fa-pen-to-square');
         yield MenuItem::linkTo(GlobalMemoryCrudController::class, 'Global memories', 'fa fa-brain');
     }
 }
