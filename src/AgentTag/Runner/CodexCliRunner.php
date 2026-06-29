@@ -48,8 +48,10 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
             }
         };
 
+        $input->progressSink()?->onHeartbeat();
         $process->start($callback);
         while ($process->isRunning()) {
+            $input->progressSink()?->onHeartbeat();
             if ($input->interruptionRequested()) {
                 $interrupted = true;
                 $process->stop(5.0);

@@ -180,7 +180,7 @@ Interaction model:
 - Post `@Codex stop` in the same thread to interrupt the active run without starting a replacement.
 - Start a new root message/thread for a new independent topic.
 - The webhook returns no canned acknowledgement for normal runs; the worker posts agent-generated progress and final messages.
-- The bot shows typing while a run is queued or posting progress.
+- The bot refreshes Mattermost typing indicators after webhook receipt and throughout active Codex runs, including between progress messages.
 - Normal run responses are kept Mattermost-friendly and are instructed to match the user's language.
 
 Endpoint:

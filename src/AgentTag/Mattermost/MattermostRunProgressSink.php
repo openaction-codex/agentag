@@ -15,12 +15,15 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
 
     private int $lastPostedAt = 0;
 
+    private int $lastTypingAt = 0;
+
     public function __construct(
         private readonly MattermostNotifier $notifier,
         private readonly MattermostInboundEvent $event,
         private readonly AgentRun $run,
         private readonly ?RunEventRecorder $runEventRecorder = null,
         private readonly int $minimumIntervalSeconds = 5,
+        private readonly int $typingRefreshIntervalSeconds = 2,
     ) {
     }
 
@@ -33,6 +36,12 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
         }
 
         $this->post($message, $progress->type());
+    }
+
+    #[\Override]
+    public function onHeartbeat(): void
+    {
+        $this->refreshTyping(false);
     }
 
     public function finish(AgentRunnerResult $result): void
@@ -56,7 +65,7 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
 
     private function post(string $message, string $type): void
     {
-        $this->notifier->showTyping($this->event);
+        $this->refreshTyping(true);
         $this->notifier->postProgress($this->event, $message);
         $this->runEventRecorder?->record($this->run, RunEvent::TYPE_PROGRESS_UPDATE, $message, [
             'platform' => 'mattermost',
@@ -67,6 +76,17 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
 
         $this->lastPostedMessage = $message;
         $this->lastPostedAt = time();
+    }
+
+    private function refreshTyping(bool $force): void
+    {
+        $now = time();
+        if (!$force && 0 !== $this->lastTypingAt && $now - $this->lastTypingAt < $this->typingRefreshIntervalSeconds) {
+            return;
+        }
+
+        $this->notifier->showTyping($this->event);
+        $this->lastTypingAt = $now;
     }
 
     private function formatMessage(string $message): string

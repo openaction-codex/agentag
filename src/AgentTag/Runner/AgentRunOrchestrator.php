@@ -71,6 +71,7 @@ final readonly class AgentRunOrchestrator
             'working_directory' => $workingDirectory,
             'runner_mode' => $runnerMode,
         ]);
+        $progressSink?->onHeartbeat();
 
         $result = $this->runner->run(new AgentRunnerInput(
             $prompt,

@@ -49,6 +49,8 @@ final readonly class MattermostInteractionHandler
             return MattermostInteractionResult::duplicate();
         }
 
+        $this->notifier->showTyping($event);
+
         if (null !== $this->memoryCommandHandler) {
             $memoryMessage = $this->memoryCommandHandler->handle($event->text(), new GlobalMemoryCommandContext(
                 'mattermost',
@@ -57,7 +59,6 @@ final readonly class MattermostInteractionHandler
                 $event->postId(),
             ));
             if (null !== $memoryMessage) {
-                $this->notifier->showTyping($event);
                 $this->notifier->postProgress($event, $memoryMessage);
 
                 return MattermostInteractionResult::handled($memoryMessage);
@@ -68,7 +69,6 @@ final readonly class MattermostInteractionHandler
         $interruptedRuns = $this->runInterrupter->interruptActiveRuns($session, $event->eventId(), $event->userId());
         if ($this->isStopCommand($event->text())) {
             if ($interruptedRuns > 0) {
-                $this->notifier->showTyping($event);
                 $this->notifier->postProgress($event, 'Interruption requested for the active run.');
             }
 
@@ -102,7 +102,6 @@ final readonly class MattermostInteractionHandler
             throw new \LogicException('Recorded Mattermost runs must have an id before dispatch.');
         }
 
-        $this->notifier->showTyping($event);
         $this->messageBus->dispatch(new RunAgentRunMessage($runId));
         $this->logger?->info('Queued Mattermost agent run.', [
             'run_id' => $run->id(),

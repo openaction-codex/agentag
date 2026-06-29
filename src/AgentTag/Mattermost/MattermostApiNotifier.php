@@ -2,6 +2,7 @@
 
 namespace App\AgentTag\Mattermost;
 
+use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -10,6 +11,7 @@ final readonly class MattermostApiNotifier implements MattermostNotifier
     public function __construct(
         private HttpClientInterface $httpClient,
         private MattermostApiSettings $settings,
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -54,12 +56,24 @@ final readonly class MattermostApiNotifier implements MattermostNotifier
     private function request(string $method, string $path, array $payload): void
     {
         try {
-            $this->httpClient->request($method, $this->settings->baseUrl().$path, [
+            $statusCode = $this->httpClient->request($method, $this->settings->baseUrl().$path, [
                 'auth_bearer' => $this->settings->botToken(),
                 'json' => $payload,
                 'headers' => ['Accept' => 'application/json'],
             ])->getStatusCode();
+
+            if ($statusCode >= 400) {
+                $this->logger?->warning('Mattermost API request failed.', [
+                    'method' => $method,
+                    'path' => $path,
+                    'status_code' => $statusCode,
+                ]);
+            }
         } catch (TransportExceptionInterface) {
+            $this->logger?->warning('Mattermost API request failed due to a transport error.', [
+                'method' => $method,
+                'path' => $path,
+            ]);
         }
     }
 

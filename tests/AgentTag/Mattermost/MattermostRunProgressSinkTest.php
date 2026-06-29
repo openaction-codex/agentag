@@ -26,6 +26,22 @@ final class MattermostRunProgressSinkTest extends TestCase
 
         self::assertSame([$message], $notifier->progressMessages);
     }
+
+    public function testItRefreshesTypingOnHeartbeat(): void
+    {
+        $notifier = new MarkdownTraceableMattermostNotifier();
+        $sink = new MattermostRunProgressSink(
+            $notifier,
+            new MattermostInboundEvent('post', '', 'post', '', 'channel', 'O', 'team', 'user', ''),
+            new AgentRun(new ChatSession('mattermost:team:channel:post', 'mattermost', 'team', 'channel', 'post', new \DateTimeImmutable()), AgentRun::STATUS_RUNNING, new \DateTimeImmutable()),
+            typingRefreshIntervalSeconds: 0,
+        );
+
+        $sink->onHeartbeat();
+        $sink->onHeartbeat();
+
+        self::assertSame(2, $notifier->typingCount);
+    }
 }
 
 final class MarkdownTraceableMattermostNotifier implements MattermostNotifier
@@ -35,9 +51,12 @@ final class MarkdownTraceableMattermostNotifier implements MattermostNotifier
      */
     public array $progressMessages = [];
 
+    public int $typingCount = 0;
+
     #[\Override]
     public function showTyping(MattermostInboundEvent $event): void
     {
+        ++$this->typingCount;
     }
 
     #[\Override]

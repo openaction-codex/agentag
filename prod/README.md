@@ -233,6 +233,8 @@ tail -f /var/log/php8.4-fpm-agentag.slow.log
 
 For an admin HTTP 500, check both `tail -f /srv/agentag/app/var/log/prod.log` and `journalctl -u php8.4-fpm -f` while reloading `/admin`.
 
+If Mattermost typing indicators do not appear, verify `MATTERMOST_BASE_URL`, `MATTERMOST_BOT_TOKEN`, and that the bot can access the channel. Failed Mattermost API calls are logged in `prod.log` and the relevant systemd journal.
+
 ## 5. Mattermost
 
 Configure a Mattermost outgoing webhook or integration to send requests to:
