@@ -21,6 +21,7 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
             'exec',
             '--dangerously-bypass-approvals-and-sandbox',
             '--skip-git-repo-check',
+            '--json',
             '--cd',
             $input->workingDirectory(),
             '--output-last-message',
@@ -35,7 +36,19 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
             $input->prompt(),
             $input->timeoutSeconds(),
         );
-        $process->run();
+        $parser = new CodexJsonEventParser();
+        $process->run(function (string $type, string $buffer) use ($input, $parser): void {
+            if ('out' !== $type && !str_ends_with($type, 'OUT')) {
+                return;
+            }
+
+            foreach ($parser->consume($buffer) as $progress) {
+                $input->progressSink()?->onProgress($progress);
+            }
+        });
+        foreach ($parser->flush() as $progress) {
+            $input->progressSink()?->onProgress($progress);
+        }
 
         $stdout = $process->output();
         $stderr = $process->errorOutput();

@@ -11,9 +11,9 @@ final readonly class SymfonyRunnerProcess implements RunnerProcess
     }
 
     #[\Override]
-    public function run(): int
+    public function run(?callable $callback = null): int
     {
-        return $this->process->run();
+        return $this->process->run($callback);
     }
 
     #[\Override]

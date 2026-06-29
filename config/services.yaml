@@ -25,8 +25,8 @@ services:
         arguments:
             $tag: '%env(string:AGENTAG_TAG)%'
             $workspacePath: '%env(resolve:AGENTAG_WORKSPACE_PATH)%'
-            $workflowsPath: '%env(resolve:AGENTAG_WORKFLOWS_PATH)%'
             $repositoryUrlsCsv: '%env(string:AGENTAG_REPOSITORY_URLS)%'
+            $runTimeoutSeconds: '%env(int:AGENTAG_RUN_TIMEOUT_SECONDS)%'
 
     App\AgentTag\Security\SensitiveTextRedactor:
         arguments:
@@ -35,14 +35,13 @@ services:
     App\AgentTag\Workspace\WorkspaceLayout:
         arguments:
             $workspacePath: '%env(resolve:AGENTAG_WORKSPACE_PATH)%'
-            $workflowsPath: '%env(resolve:AGENTAG_WORKFLOWS_PATH)%'
 
     App\AgentTag\Mattermost\MattermostWebhookAuthenticator:
         arguments:
             $expectedToken: '%env(string:MATTERMOST_WEBHOOK_TOKEN)%'
 
     App\AgentTag\Mattermost\MattermostNotifier:
-        alias: App\AgentTag\Mattermost\NullMattermostNotifier
+        alias: App\AgentTag\Mattermost\MattermostApiNotifier
 
     App\AgentTag\Chat\InboundEventIdempotencyStore:
         alias: App\AgentTag\Chat\InMemoryInboundEventIdempotencyStore
@@ -50,11 +49,11 @@ services:
     App\AgentTag\Session\ChatSessionStore:
         alias: App\AgentTag\Session\DoctrineChatSessionStore
 
-    App\AgentTag\Workflow\WorkflowRevisionResolver:
-        alias: App\AgentTag\Workflow\GitWorkflowRevisionResolver
+    App\AgentTag\Workspace\WorkspaceRevisionResolver:
+        alias: App\AgentTag\Workspace\GitWorkspaceRevisionResolver
 
-    App\AgentTag\Workflow\WorkflowSelector:
-        alias: App\AgentTag\Workflow\CatalogWorkflowSelector
+    App\AgentTag\Agent\AgentProfileProvider:
+        alias: App\AgentTag\Agent\WorkspaceAgentProfileProvider
 
     App\AgentTag\Runner\ProcessFactory:
         alias: App\AgentTag\Runner\SymfonyProcessFactory

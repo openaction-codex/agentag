@@ -31,9 +31,9 @@ final class OperatorCommandTest extends KernelTestCase
         self::bootKernel();
         $this->refreshDatabase();
         $this->workspaceDirectory = sys_get_temp_dir().'/agentag-operator-'.bin2hex(random_bytes(6));
+        mkdir($this->workspaceDirectory.'/workspace', 0777, true);
         mkdir($this->workspaceDirectory.'/runs', 0777, true);
         mkdir($this->workspaceDirectory.'/artifacts', 0777, true);
-        mkdir($this->workspaceDirectory.'/workflows', 0777, true);
     }
 
     #[\Override]
@@ -45,7 +45,7 @@ final class OperatorCommandTest extends KernelTestCase
     public function testFailedRunCommandShowsSanitizedRunMetadata(): void
     {
         $session = new ChatSession('mattermost:team:channel:thread', 'mattermost', 'team', 'channel', 'thread', new \DateTimeImmutable());
-        $run = new AgentRun($session, 'failed', new \DateTimeImmutable(), 'input', 'output', null, 'developer', 'v1', 'abc123', 'event-1', 'user-1');
+        $run = new AgentRun($session, 'failed', new \DateTimeImmutable(), 'input', 'output', null, 'agent', null, 'abc123', 'event-1', 'user-1');
         $this->entityManager()->persist($session);
         $this->entityManager()->persist($run);
         $this->entityManager()->flush();
@@ -53,7 +53,7 @@ final class OperatorCommandTest extends KernelTestCase
         $tester = new CommandTester(new ListFailedRunsCommand($this->entityManager()));
 
         self::assertSame(Command::SUCCESS, $tester->execute([]));
-        self::assertStringContainsString('developer', $tester->getDisplay());
+        self::assertStringContainsString('agent', $tester->getDisplay());
         self::assertStringContainsString('event-1', $tester->getDisplay());
         self::assertStringContainsString('user-1', $tester->getDisplay());
     }
@@ -135,15 +135,14 @@ final class OperatorCommandTest extends KernelTestCase
     {
         return new AgentTagSettings(
             '@Codex',
-            $this->workspaceDirectory,
-            $this->workspaceDirectory.'/workflows',
+            $this->workspaceDirectory.'/workspace',
             'git@github.com:openaction-codex/agentag.git',
         );
     }
 
     private function workspaceLayout(): WorkspaceLayout
     {
-        return new WorkspaceLayout($this->workspaceDirectory, $this->workspaceDirectory.'/workflows');
+        return new WorkspaceLayout($this->workspaceDirectory.'/workspace');
     }
 
     private function removeDirectory(string $path): void

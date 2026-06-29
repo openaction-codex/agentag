@@ -2,9 +2,9 @@
 
 namespace App\AgentTag\Session;
 
+use App\AgentTag\Agent\AgentProfile;
 use App\AgentTag\Memory\GlobalMemoryService;
 use App\AgentTag\Tool\ToolDefinition;
-use App\AgentTag\Workflow\WorkflowDefinition;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use App\Entity\GlobalMemory;
@@ -28,16 +28,17 @@ final readonly class SessionContextSnapshotBuilder
         ChatSession $session,
         ChatThreadContext $threadContext,
         array $priorRuns,
-        WorkflowDefinition $workflow,
+        AgentProfile $agent,
         array $tools,
     ): string {
         $sections = [
             sprintf('Session: %s', $session->sessionKey()),
             sprintf('Platform: %s', $session->platform()),
             sprintf('Thread: %s', $session->threadId()),
-            sprintf('Workflow: %s', $workflow->name()),
-            sprintf('Workflow version: %s', $workflow->version() ?? '(none)'),
-            sprintf('Workflow revision: %s', $workflow->revision() ?? '(none)'),
+            sprintf('Agent: %s', $agent->name()),
+            sprintf('Workspace template: %s', $agent->workspacePath()),
+            sprintf('Workspace revision: %s', $agent->workspaceRevision() ?? '(none)'),
+            sprintf('Session workspace: %s', $session->workspacePath() ?? '(not prepared)'),
             sprintf('Session summary: %s', $session->summary() ?? '(none)'),
             $this->formatTools($tools),
             $this->formatThreadMessages($threadContext),

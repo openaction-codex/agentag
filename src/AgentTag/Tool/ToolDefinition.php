@@ -9,7 +9,6 @@ namespace App\AgentTag\Tool;
  *     command?: mixed,
  *     arguments?: mixed,
  *     server?: mixed,
- *     allowed_workflows?: mixed,
  *     working_directory?: mixed,
  *     environment?: mixed,
  *     env?: mixed,
@@ -33,7 +32,6 @@ final readonly class ToolDefinition
 
     /**
      * @param list<string> $arguments
-     * @param list<string> $allowedWorkflows
      * @param list<string> $environmentWhitelist
      */
     private function __construct(
@@ -42,7 +40,6 @@ final readonly class ToolDefinition
         private ?string $command,
         private array $arguments,
         private ?string $server,
-        private array $allowedWorkflows,
         private string $workingDirectory,
         private array $environmentWhitelist,
         private int $timeoutSeconds,
@@ -84,7 +81,6 @@ final readonly class ToolDefinition
             $command,
             self::stringList($data['arguments'] ?? []),
             $server,
-            self::stringList($data['allowed_workflows'] ?? []),
             self::oneOf(self::optionalString($data['working_directory'] ?? null) ?? 'run', ['workspace', 'run', 'codebase', 'none'], 'working_directory'),
             self::stringList($data['environment'] ?? $data['env'] ?? []),
             self::positiveInt($data['timeout_seconds'] ?? 120, 'timeout_seconds'),
@@ -131,19 +127,6 @@ final readonly class ToolDefinition
     public function server(): ?string
     {
         return $this->server;
-    }
-
-    /**
-     * @return list<string>
-     */
-    public function allowedWorkflows(): array
-    {
-        return $this->allowedWorkflows;
-    }
-
-    public function allowsWorkflow(string $workflowName): bool
-    {
-        return [] === $this->allowedWorkflows || in_array($workflowName, $this->allowedWorkflows, true);
     }
 
     public function workingDirectory(): string

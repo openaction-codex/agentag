@@ -16,7 +16,7 @@ final readonly class ApprovalRequestService
         string $sensitivity,
         string $action,
         string $targetSystem,
-        string $workflowName,
+        string $agentName,
         string $requesterId,
         string $expectedEffect,
         ?AgentRun $run = null,
@@ -25,7 +25,7 @@ final readonly class ApprovalRequestService
             return null;
         }
 
-        $request = new ApprovalRequest($run, $action, $targetSystem, $workflowName, $requesterId, $expectedEffect, $sensitivity, new \DateTimeImmutable());
+        $request = new ApprovalRequest($run, $action, $targetSystem, $agentName, $requesterId, $expectedEffect, $sensitivity, new \DateTimeImmutable());
         $this->entityManager->persist($request);
         $this->entityManager->flush();
 

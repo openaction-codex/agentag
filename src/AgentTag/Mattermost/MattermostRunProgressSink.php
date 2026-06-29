@@ -1,0 +1,81 @@
+<?php
+
+namespace App\AgentTag\Mattermost;
+
+use App\AgentTag\Run\RunEventRecorder;
+use App\AgentTag\Runner\AgentRunnerProgress;
+use App\AgentTag\Runner\AgentRunnerProgressSink;
+use App\AgentTag\Runner\AgentRunnerResult;
+use App\Entity\AgentRun;
+use App\Entity\RunEvent;
+
+final class MattermostRunProgressSink implements AgentRunnerProgressSink
+{
+    private ?string $lastPostedMessage = null;
+
+    private int $lastPostedAt = 0;
+
+    public function __construct(
+        private readonly MattermostNotifier $notifier,
+        private readonly MattermostInboundEvent $event,
+        private readonly AgentRun $run,
+        private readonly ?RunEventRecorder $runEventRecorder = null,
+        private readonly int $minimumIntervalSeconds = 5,
+    ) {
+    }
+
+    #[\Override]
+    public function onProgress(AgentRunnerProgress $progress): void
+    {
+        $message = $this->formatMessage($progress->message());
+        if (!$this->shouldPost($message)) {
+            return;
+        }
+
+        $this->post($message, $progress->type());
+    }
+
+    public function finish(AgentRunnerResult $result): void
+    {
+        $message = $this->formatMessage($result->finalMessage());
+        if ('' === $message || $message === $this->lastPostedMessage) {
+            return;
+        }
+
+        $this->post($message, 'final_message');
+    }
+
+    private function shouldPost(string $message): bool
+    {
+        if ('' === $message || $message === $this->lastPostedMessage) {
+            return false;
+        }
+
+        return 0 === $this->lastPostedAt || time() - $this->lastPostedAt >= $this->minimumIntervalSeconds;
+    }
+
+    private function post(string $message, string $type): void
+    {
+        $this->notifier->showTyping($this->event);
+        $this->notifier->postProgress($this->event, $message);
+        $this->runEventRecorder?->record($this->run, RunEvent::TYPE_PROGRESS_UPDATE, $message, [
+            'platform' => 'mattermost',
+            'progress_type' => $type,
+            'channel_id' => $this->event->channelId(),
+            'thread_id' => '' === $this->event->rootId() ? $this->event->postId() : $this->event->rootId(),
+        ]);
+
+        $this->lastPostedMessage = $message;
+        $this->lastPostedAt = time();
+    }
+
+    private function formatMessage(string $message): string
+    {
+        $message = preg_replace('/\s+/', ' ', trim($message)) ?? trim($message);
+        if (strlen($message) <= 1200) {
+            return $message;
+        }
+
+        return substr($message, 0, 1197).'...';
+    }
+}

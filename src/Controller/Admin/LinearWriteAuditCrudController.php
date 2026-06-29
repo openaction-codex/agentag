@@ -33,7 +33,7 @@ final class LinearWriteAuditCrudController extends ReadOnlyCrudController
         yield TextField::new('operation');
         yield TextField::new('status');
         yield TextField::new('targetIssueIdentifier', 'Target issue');
-        yield TextField::new('workflowName', 'Workflow')->hideOnIndex();
+        yield TextField::new('workflowName', 'Agent')->hideOnIndex();
         yield TextField::new('requesterId', 'Requester')->hideOnIndex();
         yield TextField::new('sourceMessageId', 'Source message')->hideOnIndex();
         yield $this->redactedJsonField('resultingIssueIdentifiers', 'Resulting issues');

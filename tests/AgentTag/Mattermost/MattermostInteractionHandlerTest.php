@@ -2,6 +2,8 @@
 
 namespace App\Tests\AgentTag\Mattermost;
 
+use App\AgentTag\Agent\AgentProfile;
+use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Chat\ChatSessionReference;
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InMemoryInboundEventIdempotencyStore;
@@ -14,12 +16,12 @@ use App\AgentTag\Mattermost\MattermostThreadContextProvider;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Session\ChatThreadContext;
 use App\AgentTag\Session\ChatThreadMessage;
-use App\AgentTag\Workflow\WorkflowDefinition;
-use App\AgentTag\Workflow\WorkflowSelection;
-use App\AgentTag\Workflow\WorkflowSelector;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
+use App\Message\RunAgentRunMessage;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 final class MattermostInteractionHandlerTest extends TestCase
 {
@@ -27,14 +29,16 @@ final class MattermostInteractionHandlerTest extends TestCase
     {
         $notifier = new TraceableMattermostNotifier();
         $sessionStore = new TraceableChatSessionStore();
+        $messageBus = new TraceableMessageBus();
         $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '')),
             new MattermostSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,
             $sessionStore,
             new FixedMattermostThreadContextProvider(),
-            new FixedWorkflowSelector(WorkflowSelection::selected($this->workflow())),
+            new FixedAgentProfileProvider(),
+            $messageBus,
         );
 
         $firstResult = $handler->handle($this->event());
@@ -43,52 +47,33 @@ final class MattermostInteractionHandlerTest extends TestCase
         self::assertTrue($firstResult->isHandled());
         self::assertFalse($secondResult->isHandled());
         self::assertSame(1, $notifier->typingCount);
-        self::assertSame(['Accepted workflow `developer`. I will continue this Mattermost thread as session `post`.'], $notifier->progressMessages);
+        self::assertSame([], $notifier->progressMessages);
+        self::assertSame([1], $messageBus->runIds);
         self::assertSame(['mattermost:team:channel:post'], $sessionStore->sessionKeys);
-        self::assertSame(['developer'], $sessionStore->workflowNames);
+        self::assertSame(['agent'], $sessionStore->agentNames);
         self::assertSame(['post'], $sessionStore->sourceEventIds);
         self::assertSame(['user'], $sessionStore->requesterIds);
         self::assertSame([['root text', '@Codex help']], $sessionStore->threadMessages);
-    }
-
-    public function testItReturnsWorkflowOptionsWhenSelectionFails(): void
-    {
-        $notifier = new TraceableMattermostNotifier();
-        $sessionStore = new TraceableChatSessionStore();
-        $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
-            new MattermostSessionMapper(),
-            new InMemoryInboundEventIdempotencyStore(),
-            $notifier,
-            $sessionStore,
-            new FixedMattermostThreadContextProvider(),
-            new FixedWorkflowSelector(WorkflowSelection::unselected('Unknown workflow `sales`. Available workflows: `developer`.')),
-        );
-
-        $result = $handler->handle($this->event(text: '@Codex workflow:sales help'));
-
-        self::assertTrue($result->isHandled());
-        self::assertSame(['Unknown workflow `sales`. Available workflows: `developer`.'], $notifier->progressMessages);
-        self::assertSame([], $sessionStore->sessionKeys);
     }
 
     public function testItReturnsConfigurationErrorsInChat(): void
     {
         $notifier = new TraceableMattermostNotifier();
         $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '')),
             new MattermostSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,
-            new FailingChatSessionStore('Unknown tool `missing` requested by workflow `developer`.'),
+            new FailingChatSessionStore('Workspace template directory "/tmp/workspace" does not exist.'),
             new FixedMattermostThreadContextProvider(),
-            new FixedWorkflowSelector(WorkflowSelection::selected($this->workflow())),
+            new FixedAgentProfileProvider(),
+            new TraceableMessageBus(),
         );
 
         $result = $handler->handle($this->event());
 
         self::assertTrue($result->isHandled());
-        self::assertSame(['Unknown tool `missing` requested by workflow `developer`.'], $notifier->progressMessages);
+        self::assertSame(['Workspace template directory "/tmp/workspace" does not exist.'], $notifier->progressMessages);
     }
 
     public function testItIgnoresMessagesWithoutTheConfiguredMention(): void
@@ -96,13 +81,14 @@ final class MattermostInteractionHandlerTest extends TestCase
         $notifier = new TraceableMattermostNotifier();
         $sessionStore = new TraceableChatSessionStore();
         $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '')),
             new MattermostSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,
             $sessionStore,
             new FixedMattermostThreadContextProvider(),
-            new FixedWorkflowSelector(WorkflowSelection::selected($this->workflow())),
+            new FixedAgentProfileProvider(),
+            new TraceableMessageBus(),
         );
 
         $result = $handler->handle($this->event(text: 'hello'));
@@ -127,11 +113,6 @@ final class MattermostInteractionHandlerTest extends TestCase
             '',
         );
     }
-
-    private function workflow(): WorkflowDefinition
-    {
-        return WorkflowDefinition::fromArray(['name' => 'developer', 'version' => 'v1'], '/tmp/developer.yaml', 'abc123');
-    }
 }
 
 final class TraceableChatSessionStore implements ChatSessionStore
@@ -144,7 +125,7 @@ final class TraceableChatSessionStore implements ChatSessionStore
     /**
      * @var list<string>
      */
-    public array $workflowNames = [];
+    public array $agentNames = [];
 
     /**
      * @var list<string|null>
@@ -166,12 +147,12 @@ final class TraceableChatSessionStore implements ChatSessionStore
         ChatSessionReference $reference,
         string $inputSummary,
         ChatThreadContext $threadContext,
-        WorkflowDefinition $workflow,
+        AgentProfile $agent,
         ?string $sourceEventId = null,
         ?string $requesterId = null,
     ): AgentRun {
         $this->sessionKeys[] = $reference->key();
-        $this->workflowNames[] = $workflow->name();
+        $this->agentNames[] = $agent->name();
         $this->sourceEventIds[] = $sourceEventId;
         $this->requesterIds[] = $requesterId;
         $this->threadMessages[] = array_map(
@@ -179,11 +160,15 @@ final class TraceableChatSessionStore implements ChatSessionStore
             $threadContext->messages(),
         );
 
-        return new AgentRun(
+        $run = new AgentRun(
             new ChatSession($reference->key(), $reference->platform(), $reference->teamId(), $reference->channelId(), $reference->threadId(), new \DateTimeImmutable()),
             'accepted',
             new \DateTimeImmutable(),
         );
+        $reflection = new \ReflectionProperty(AgentRun::class, 'id');
+        $reflection->setValue($run, count($this->sessionKeys));
+
+        return $run;
     }
 }
 
@@ -198,7 +183,7 @@ final readonly class FailingChatSessionStore implements ChatSessionStore
         ChatSessionReference $reference,
         string $inputSummary,
         ChatThreadContext $threadContext,
-        WorkflowDefinition $workflow,
+        AgentProfile $agent,
         ?string $sourceEventId = null,
         ?string $requesterId = null,
     ): AgentRun {
@@ -206,16 +191,12 @@ final readonly class FailingChatSessionStore implements ChatSessionStore
     }
 }
 
-final readonly class FixedWorkflowSelector implements WorkflowSelector
+final readonly class FixedAgentProfileProvider implements AgentProfileProvider
 {
-    public function __construct(private WorkflowSelection $selection)
-    {
-    }
-
     #[\Override]
-    public function select(string $message): WorkflowSelection
+    public function profile(): AgentProfile
     {
-        return $this->selection;
+        return new AgentProfile('agent', '/tmp/workspace', null, 'codex-full-access', 1200);
     }
 }
 
@@ -250,5 +231,23 @@ final class TraceableMattermostNotifier implements MattermostNotifier
     public function postProgress(MattermostInboundEvent $event, string $message): void
     {
         $this->progressMessages[] = $message;
+    }
+}
+
+final class TraceableMessageBus implements MessageBusInterface
+{
+    /**
+     * @var list<int>
+     */
+    public array $runIds = [];
+
+    #[\Override]
+    public function dispatch(object $message, array $stamps = []): Envelope
+    {
+        if ($message instanceof RunAgentRunMessage) {
+            $this->runIds[] = $message->runId();
+        }
+
+        return new Envelope($message, $stamps);
     }
 }

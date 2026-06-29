@@ -59,6 +59,7 @@ final class CodexCliRunnerTest extends TestCase
             'exec',
             '--dangerously-bypass-approvals-and-sandbox',
             '--skip-git-repo-check',
+            '--json',
             '--cd',
             $this->workingDirectory,
             '--output-last-message',
@@ -119,11 +120,14 @@ final readonly class FakeRunnerProcess implements RunnerProcess
     }
 
     #[\Override]
-    public function run(): int
+    public function run(?callable $callback = null): int
     {
         $outputPathIndex = array_search('--output-last-message', $this->command, true);
         if (is_int($outputPathIndex)) {
             file_put_contents($this->command[$outputPathIndex + 1], 'Final answer from Codex.');
+        }
+        if (null !== $callback) {
+            $callback('out', "{\"type\":\"agent_message\",\"message\":\"Working on it.\"}\n");
         }
 
         return 0;

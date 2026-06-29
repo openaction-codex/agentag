@@ -2,12 +2,10 @@
 
 namespace App\AgentTag\Linear;
 
-use App\AgentTag\Workflow\WorkflowDefinition;
-
 final class LinearToolUnavailableException extends \RuntimeException
 {
-    public static function forWorkflow(WorkflowDefinition $workflow): self
+    public static function forWorkspace(): self
     {
-        return new self(sprintf('Linear tool is not enabled for workflow `%s`.', $workflow->name()));
+        return new self('Linear tool is not configured in the workspace.');
     }
 }

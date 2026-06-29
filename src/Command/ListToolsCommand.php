@@ -9,7 +9,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'agentag:tools:list', description: 'List tools configured for AgentTag workflows.')]
+#[AsCommand(name: 'agentag:tools:list', description: 'List tools configured in the AgentTag workspace.')]
 final class ListToolsCommand extends Command
 {
     public function __construct(private readonly ToolCatalog $toolCatalog)
@@ -41,7 +41,6 @@ final class ListToolsCommand extends Command
             $rows[] = [
                 $tool->name(),
                 $tool->type(),
-                implode(', ', $tool->allowedWorkflows()),
                 $tool->workingDirectory(),
                 implode(', ', $tool->environmentWhitelist()),
                 $tool->timeoutSeconds(),
@@ -51,7 +50,7 @@ final class ListToolsCommand extends Command
             ];
         }
 
-        $io->table(['Name', 'Type', 'Workflows', 'Cwd', 'Env', 'Timeout', 'Sensitivity', 'Confirm', 'Sandbox'], $rows);
+        $io->table(['Name', 'Type', 'Cwd', 'Env', 'Timeout', 'Sensitivity', 'Confirm', 'Sandbox'], $rows);
 
         return Command::SUCCESS;
     }

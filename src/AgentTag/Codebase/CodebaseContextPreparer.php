@@ -2,7 +2,6 @@
 
 namespace App\AgentTag\Codebase;
 
-use App\AgentTag\Workflow\WorkflowDefinition;
 use App\Entity\AgentRun;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -17,11 +16,11 @@ final readonly class CodebaseContextPreparer
     ) {
     }
 
-    public function prepare(WorkflowDefinition $workflow, string $runIdentifier, ?AgentRun $run = null): CodebaseContext
+    public function prepare(string $workspacePath, ?AgentRun $run = null): CodebaseContext
     {
         $clones = [];
-        foreach ($this->repositoryResolver->repositoriesFor($workflow) as $repository) {
-            $clones[] = $this->repositoryCloner->cloneForRun($repository, $runIdentifier);
+        foreach ($this->repositoryResolver->repositories() as $repository) {
+            $clones[] = $this->repositoryCloner->cloneForWorkspace($repository, $workspacePath);
         }
 
         $context = new CodebaseContext($clones);

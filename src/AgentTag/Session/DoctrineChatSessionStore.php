@@ -2,10 +2,12 @@
 
 namespace App\AgentTag\Session;
 
+use App\AgentTag\Agent\AgentProfile;
 use App\AgentTag\Chat\ChatSessionReference;
 use App\AgentTag\Security\SensitiveTextRedactor;
 use App\AgentTag\Tool\ToolCatalog;
-use App\AgentTag\Workflow\WorkflowDefinition;
+use App\AgentTag\Workspace\WorkspaceLayout;
+use App\AgentTag\Workspace\WorkspaceTemplateCopier;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use Doctrine\ORM\EntityManagerInterface;
@@ -18,6 +20,8 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         private SessionContextSnapshotBuilder $snapshotBuilder,
         private SensitiveTextRedactor $redactor,
         private ToolCatalog $toolCatalog,
+        private WorkspaceLayout $workspaceLayout,
+        private WorkspaceTemplateCopier $workspaceTemplateCopier,
         private LoggerInterface $logger,
     ) {
     }
@@ -27,7 +31,7 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         ChatSessionReference $reference,
         string $inputSummary,
         ChatThreadContext $threadContext,
-        WorkflowDefinition $workflow,
+        AgentProfile $agent,
         ?string $sourceEventId = null,
         ?string $requesterId = null,
     ): AgentRun {
@@ -56,6 +60,9 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         }
 
         $session->touch($now);
+        $workspacePath = $session->workspacePath() ?? $this->workspaceLayout->sessionPath($reference->key());
+        $this->workspaceTemplateCopier->copy($agent->workspacePath(), $workspacePath);
+        $session->assignWorkspacePath($workspacePath);
 
         $priorRuns = $this->entityManager->getRepository(AgentRun::class)->findBy(
             ['session' => $session],
@@ -66,8 +73,8 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
             $session,
             $threadContext,
             $priorRuns,
-            $workflow,
-            $this->toolCatalog->forWorkflow($workflow),
+            $agent,
+            $this->toolCatalog->all(),
         );
 
         $run = new AgentRun(
@@ -77,11 +84,12 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
             $this->redactor->redact($inputSummary),
             null,
             $this->redactor->redact($contextSnapshot),
-            $workflow->name(),
-            $workflow->version(),
-            $workflow->revision(),
+            $agent->name(),
+            null,
+            $agent->workspaceRevision(),
             null === $sourceEventId ? null : $this->redactor->redact($sourceEventId),
             null === $requesterId ? null : $this->redactor->redact($requesterId),
+            $this->redactor->redact($workspacePath),
         );
         $this->entityManager->persist($run);
         $this->entityManager->flush();
@@ -89,7 +97,8 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         $this->logger->info('Recorded agent run.', [
             'run_id' => $run->id(),
             'session_key' => $reference->key(),
-            'workflow' => $workflow->name(),
+            'agent' => $agent->name(),
+            'workspace_path' => $workspacePath,
             'source_event_id' => $sourceEventId,
             'requester_id' => $requesterId,
         ]);

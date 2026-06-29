@@ -9,12 +9,14 @@ final readonly class AgentTagSettings
     public function __construct(
         private string $tag,
         private string $workspacePath,
-        private string $workflowsPath,
         string $repositoryUrlsCsv,
+        private int $runTimeoutSeconds = 1200,
     ) {
         $this->assertValidTag($tag);
         $this->assertAbsolutePath($workspacePath, 'workspace path');
-        $this->assertAbsolutePath($workflowsPath, 'workflows path');
+        if ($runTimeoutSeconds < 1) {
+            throw new \InvalidArgumentException('AgentTag run timeout must be a positive integer.');
+        }
 
         $this->repositories = RepositoryList::fromCsv($repositoryUrlsCsv);
     }
@@ -29,9 +31,9 @@ final readonly class AgentTagSettings
         return $this->normalizePath($this->workspacePath);
     }
 
-    public function workflowsPath(): string
+    public function runTimeoutSeconds(): int
     {
-        return $this->normalizePath($this->workflowsPath);
+        return $this->runTimeoutSeconds;
     }
 
     public function repositories(): RepositoryList

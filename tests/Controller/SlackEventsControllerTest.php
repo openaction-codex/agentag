@@ -45,7 +45,7 @@ final class SlackEventsControllerTest extends WebTestCase
         $client->jsonRequest('POST', '/integrations/slack/events', $this->payload(['text' => '@Codex help']));
 
         self::assertResponseIsSuccessful();
-        self::assertStringContainsString('Accepted workflow `developer`', (string) $client->getResponse()->getContent());
+        self::assertStringContainsString('Accepted by the generic agent', (string) $client->getResponse()->getContent());
         self::assertStringContainsString('session `1700000000.000000`', (string) $client->getResponse()->getContent());
         self::assertSame(1, $this->entityCount(ChatSession::class));
         self::assertSame(1, $this->entityCount(AgentRun::class));
@@ -104,33 +104,47 @@ final class SlackEventsControllerTest extends WebTestCase
     {
         $client = static::createClient();
         $this->refreshDatabase();
-        $this->writeTestWorkflow();
+        $this->writeTestWorkspace();
 
         return $client;
     }
 
-    private function writeTestWorkflow(): void
+    private function writeTestWorkspace(): void
     {
         $projectDirectory = static::getContainer()->getParameter('kernel.project_dir');
         if (!is_string($projectDirectory)) {
             throw new \LogicException('Kernel project directory must be available.');
         }
 
-        $workflowDirectory = $projectDirectory.'/var/test-workflows';
-        if (!is_dir($workflowDirectory)) {
-            mkdir($workflowDirectory, 0777, true);
+        $workspaceDirectory = $projectDirectory.'/var/test-workspace';
+        $this->removeDirectory($workspaceDirectory);
+        if (!is_dir($workspaceDirectory)) {
+            mkdir($workspaceDirectory, 0777, true);
         }
 
-        file_put_contents($workflowDirectory.'/developer.yaml', <<<'YAML'
-name: developer
-version: v1
-default: true
-triggers:
-    - help
-    - continue
-tools:
-    - codex
-YAML);
+        file_put_contents($workspaceDirectory.'/AGENTS.md', 'Use the shared workspace instructions.');
+    }
+
+    private function removeDirectory(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
+        }
+
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($files as $file) {
+            if (!$file instanceof \SplFileInfo) {
+                continue;
+            }
+
+            $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+        }
+
+        rmdir($path);
     }
 
     /**

@@ -164,7 +164,7 @@ class ApprovalRequest
     public function chatPrompt(): string
     {
         return sprintf(
-            "Confirmation required for `%s` on `%s`.\nWorkflow: `%s`\nRequester: `%s`\nExpected effect: %s",
+            "Confirmation required for `%s` on `%s`.\nAgent: `%s`\nRequester: `%s`\nExpected effect: %s",
             $this->action,
             $this->targetSystem,
             $this->workflowName,

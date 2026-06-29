@@ -2,11 +2,11 @@
 
 namespace App\AgentTag\Linear;
 
+use App\AgentTag\Agent\AgentProfile;
 use App\AgentTag\Approval\ApprovalRequestService;
 use App\AgentTag\Security\SensitiveTextRedactor;
 use App\AgentTag\Tool\ToolCatalog;
 use App\AgentTag\Tool\ToolDefinition;
-use App\AgentTag\Workflow\WorkflowDefinition;
 use App\Entity\ApprovalRequest;
 use App\Entity\LinearWriteAudit;
 use Doctrine\ORM\EntityManagerInterface;
@@ -35,12 +35,12 @@ final readonly class LinearToolService
     ) {
     }
 
-    public function readIssue(WorkflowDefinition $workflow, string $issueIdentifier): LinearToolInstruction
+    public function readIssue(AgentProfile $agent, string $issueIdentifier): LinearToolInstruction
     {
         $issueIdentifier = $this->requiredString($issueIdentifier, 'issue identifier');
-        $tool = $this->linearToolFor($workflow);
+        $tool = $this->linearTool();
         $this->logger?->info('Prepared Linear issue read.', [
-            'workflow' => $workflow->name(),
+            'agent' => $agent->name(),
             'tool' => $tool->name(),
             'issue_identifier' => $issueIdentifier,
         ]);
@@ -59,7 +59,7 @@ final readonly class LinearToolService
      * @param array<string, mixed> $payload
      */
     public function prepareWrite(
-        WorkflowDefinition $workflow,
+        AgentProfile $agent,
         string $operation,
         string $sourceMessageId,
         string $requesterId,
@@ -67,7 +67,7 @@ final readonly class LinearToolService
         array $payload,
     ): LinearToolInstruction {
         $this->assertWriteOperation($operation);
-        $tool = $this->linearToolFor($workflow);
+        $tool = $this->linearTool();
         $targetIssueIdentifier = $this->optionalString($targetIssueIdentifier);
         $requesterId = $this->requiredString($requesterId, 'requester id');
         $sourceMessageId = $this->requiredString($sourceMessageId, 'source message id');
@@ -76,12 +76,12 @@ final readonly class LinearToolService
             $this->operationPolicy->sensitivityFor($operation),
             $operation,
             'linear',
-            $workflow->name(),
+            $agent->name(),
             $requesterId,
             $this->expectedEffect($operation, $targetIssueIdentifier, $sourceMessageId),
         );
         $this->logger?->info('Prepared Linear write.', [
-            'workflow' => $workflow->name(),
+            'agent' => $agent->name(),
             'tool' => $tool->name(),
             'operation' => $operation,
             'target_issue_identifier' => $targetIssueIdentifier,
@@ -104,7 +104,7 @@ final readonly class LinearToolService
      * @param list<string> $resultingIssueIdentifiers
      */
     public function recordWriteSuccess(
-        WorkflowDefinition $workflow,
+        AgentProfile $agent,
         string $operation,
         string $sourceMessageId,
         string $requesterId,
@@ -112,12 +112,12 @@ final readonly class LinearToolService
         array $resultingIssueIdentifiers,
     ): LinearWriteAudit {
         $this->assertWriteOperation($operation);
-        $this->linearToolFor($workflow);
+        $this->linearTool();
 
         $audit = LinearWriteAudit::succeeded(
             $operation,
             $this->requiredString($sourceMessageId, 'source message id'),
-            $workflow->name(),
+            $agent->name(),
             $this->requiredString($requesterId, 'requester id'),
             $this->optionalString($targetIssueIdentifier),
             $resultingIssueIdentifiers,
@@ -127,7 +127,7 @@ final readonly class LinearToolService
         $this->entityManager->flush();
         $this->logger?->info('Audited successful Linear write.', [
             'audit_id' => $audit->id(),
-            'workflow' => $workflow->name(),
+            'agent' => $agent->name(),
             'operation' => $operation,
             'resulting_issue_identifiers' => $resultingIssueIdentifiers,
         ]);
@@ -136,7 +136,7 @@ final readonly class LinearToolService
     }
 
     public function recordWriteFailure(
-        WorkflowDefinition $workflow,
+        AgentProfile $agent,
         string $operation,
         string $sourceMessageId,
         string $requesterId,
@@ -144,12 +144,12 @@ final readonly class LinearToolService
         string $errorOutput,
     ): LinearWriteAudit {
         $this->assertWriteOperation($operation);
-        $this->linearToolFor($workflow);
+        $this->linearTool();
 
         $audit = LinearWriteAudit::failed(
             $operation,
             $this->requiredString($sourceMessageId, 'source message id'),
-            $workflow->name(),
+            $agent->name(),
             $this->requiredString($requesterId, 'requester id'),
             $this->optionalString($targetIssueIdentifier),
             $this->summarizeFailure($operation, $errorOutput),
@@ -159,7 +159,7 @@ final readonly class LinearToolService
         $this->entityManager->flush();
         $this->logger?->warning('Audited failed Linear write.', [
             'audit_id' => $audit->id(),
-            'workflow' => $workflow->name(),
+            'agent' => $agent->name(),
             'operation' => $operation,
             'target_issue_identifier' => $targetIssueIdentifier,
         ]);
@@ -177,15 +177,15 @@ final readonly class LinearToolService
         return sprintf('Linear `%s` failed: %s', $operation, substr($summary, 0, 500));
     }
 
-    private function linearToolFor(WorkflowDefinition $workflow): ToolDefinition
+    private function linearTool(): ToolDefinition
     {
-        foreach ($this->toolCatalog->forWorkflow($workflow) as $tool) {
+        foreach ($this->toolCatalog->all() as $tool) {
             if ('linear' === $tool->name()) {
                 return $tool;
             }
         }
 
-        throw LinearToolUnavailableException::forWorkflow($workflow);
+        throw LinearToolUnavailableException::forWorkspace();
     }
 
     private function assertWriteOperation(string $operation): void

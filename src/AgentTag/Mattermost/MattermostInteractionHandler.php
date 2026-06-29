@@ -2,15 +2,15 @@
 
 namespace App\AgentTag\Mattermost;
 
+use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
 use App\AgentTag\Memory\GlobalMemoryCommandContext;
 use App\AgentTag\Memory\GlobalMemoryCommandHandler;
-use App\AgentTag\Run\RunEventRecorder;
 use App\AgentTag\Session\ChatSessionStore;
-use App\AgentTag\Workflow\WorkflowSelector;
-use App\Entity\RunEvent;
+use App\Message\RunAgentRunMessage;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 final readonly class MattermostInteractionHandler
 {
@@ -21,9 +21,9 @@ final readonly class MattermostInteractionHandler
         private MattermostNotifier $notifier,
         private ChatSessionStore $sessionStore,
         private MattermostThreadContextProvider $threadContextProvider,
-        private WorkflowSelector $workflowSelector,
+        private AgentProfileProvider $agentProfileProvider,
+        private MessageBusInterface $messageBus,
         private ?GlobalMemoryCommandHandler $memoryCommandHandler = null,
-        private ?RunEventRecorder $runEventRecorder = null,
         private ?LoggerInterface $logger = null,
     ) {
     }
@@ -62,59 +62,42 @@ final readonly class MattermostInteractionHandler
             }
         }
 
-        $selection = $this->workflowSelector->select($event->text());
-        if (!$selection->isSelected()) {
-            $message = $selection->message();
-            $this->notifier->showTyping($event);
-            $this->notifier->postProgress($event, $message);
-
-            return MattermostInteractionResult::handled($message);
-        }
-
-        $workflow = $selection->workflow();
         $session = $this->sessionMapper->map($event);
         try {
+            $agent = $this->agentProfileProvider->profile();
             $run = $this->sessionStore->recordRun(
                 $session,
                 sprintf('Mattermost message %s from user %s.', $event->eventId(), $event->userId()),
                 $this->threadContextProvider->contextFor($event),
-                $workflow,
+                $agent,
                 $event->eventId(),
                 $event->userId(),
             );
-        } catch (\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException|\RuntimeException $exception) {
             $message = $exception->getMessage();
             $this->notifier->showTyping($event);
             $this->notifier->postProgress($event, $message);
             $this->logger?->warning('Rejected Mattermost run during configuration validation.', [
                 'event_id' => $event->eventId(),
-                'workflow' => $workflow->name(),
                 'error' => $message,
             ]);
 
             return MattermostInteractionResult::handled($message);
         }
 
-        $message = sprintf(
-            'Accepted workflow `%s`. I will continue this Mattermost thread as session `%s`.',
-            $workflow->name(),
-            $session->threadId(),
-        );
+        $runId = $run->id();
+        if (null === $runId) {
+            throw new \LogicException('Recorded Mattermost runs must have an id before dispatch.');
+        }
 
         $this->notifier->showTyping($event);
-        $this->notifier->postProgress($event, $message);
-        $this->runEventRecorder?->record($run, RunEvent::TYPE_PROGRESS_UPDATE, $message, [
-            'platform' => 'mattermost',
-            'event_id' => $event->eventId(),
-            'channel_id' => $event->channelId(),
-            'thread_id' => $session->threadId(),
-        ]);
-        $this->logger?->info('Posted Mattermost progress update.', [
+        $this->messageBus->dispatch(new RunAgentRunMessage($runId));
+        $this->logger?->info('Queued Mattermost agent run.', [
             'run_id' => $run->id(),
             'event_id' => $event->eventId(),
             'thread_id' => $session->threadId(),
         ]);
 
-        return MattermostInteractionResult::handled($message);
+        return MattermostInteractionResult::handled('');
     }
 }

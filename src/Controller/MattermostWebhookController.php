@@ -34,6 +34,9 @@ final class MattermostWebhookController extends AbstractController
         if (!$result->isHandled()) {
             return new Response('', Response::HTTP_NO_CONTENT);
         }
+        if ('' === $result->message()) {
+            return new Response('', Response::HTTP_NO_CONTENT);
+        }
 
         return new JsonResponse([
             'response_type' => 'comment',

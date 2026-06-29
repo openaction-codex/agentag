@@ -28,7 +28,7 @@ final class ApprovalRequestServiceTest extends KernelTestCase
             ActionSensitivity::NON_SENSITIVE,
             'open_pull_request',
             'github',
-            'developer',
+            'agent',
             'user-1',
             'Open a review PR.',
         );
@@ -43,14 +43,14 @@ final class ApprovalRequestServiceTest extends KernelTestCase
             ActionSensitivity::SENSITIVE,
             'push_main',
             'github',
-            'developer',
+            'agent',
             'user-1',
             'Push changes to main.',
         );
 
         self::assertInstanceOf(ApprovalRequest::class, $request);
         self::assertStringContainsString('Confirmation required for `push_main` on `github`.', $request->chatPrompt());
-        self::assertStringContainsString('Workflow: `developer`', $request->chatPrompt());
+        self::assertStringContainsString('Agent: `agent`', $request->chatPrompt());
         self::assertSame('Action approved.', $this->service()->approve($request, 'reviewer-1'));
         self::assertSame(ApprovalRequest::STATUS_APPROVED, $request->status());
         self::assertSame('reviewer-1', $request->approverId());
@@ -65,7 +65,7 @@ final class ApprovalRequestServiceTest extends KernelTestCase
             ActionSensitivity::SENSITIVE,
             'push_main',
             'github',
-            'developer',
+            'agent',
             'user-1',
             'Push changes to main.',
             $run,
@@ -98,7 +98,7 @@ final class ApprovalRequestServiceTest extends KernelTestCase
             ActionSensitivity::DESTRUCTIVE,
             $action,
             'github',
-            'developer',
+            'agent',
             'user-1',
             'High-risk external effect.',
         );

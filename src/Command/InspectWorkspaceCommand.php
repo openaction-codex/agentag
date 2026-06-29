@@ -25,8 +25,8 @@ final class InspectWorkspaceCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
         $paths = [
-            ['workspace', $this->workspaceLayout->workspacePath(), $this->exists($this->workspaceLayout->workspacePath())],
-            ['workflows', $this->workspaceLayout->workflowsPath(), $this->exists($this->workspaceLayout->workflowsPath())],
+            ['workspace template', $this->workspaceLayout->workspacePath(), $this->exists($this->workspaceLayout->workspacePath())],
+            ['runtime root', $this->workspaceLayout->runtimeRootPath(), $this->exists($this->workspaceLayout->runtimeRootPath())],
             ['runs', $this->workspaceLayout->runsPath(), $this->exists($this->workspaceLayout->runsPath())],
             ['repository cache', $this->workspaceLayout->repositoryCachePath(), $this->exists($this->workspaceLayout->repositoryCachePath())],
         ];

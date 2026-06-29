@@ -2,13 +2,13 @@
 
 namespace App\AgentTag\Slack;
 
+use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
 use App\AgentTag\Memory\GlobalMemoryCommandContext;
 use App\AgentTag\Memory\GlobalMemoryCommandHandler;
 use App\AgentTag\Run\RunEventRecorder;
 use App\AgentTag\Session\ChatSessionStore;
-use App\AgentTag\Workflow\WorkflowSelector;
 use App\Entity\RunEvent;
 use Psr\Log\LoggerInterface;
 
@@ -21,7 +21,7 @@ final readonly class SlackInteractionHandler
         private SlackNotifier $notifier,
         private ChatSessionStore $sessionStore,
         private SlackThreadContextProvider $threadContextProvider,
-        private WorkflowSelector $workflowSelector,
+        private AgentProfileProvider $agentProfileProvider,
         private ?GlobalMemoryCommandHandler $memoryCommandHandler = null,
         private ?RunEventRecorder $runEventRecorder = null,
         private ?LoggerInterface $logger = null,
@@ -62,33 +62,23 @@ final readonly class SlackInteractionHandler
             }
         }
 
-        $selection = $this->workflowSelector->select($event->text());
-        if (!$selection->isSelected()) {
-            $message = $selection->message();
-            $this->notifier->showTyping($event);
-            $this->notifier->postProgress($event, $message);
-
-            return SlackInteractionResult::handled($message);
-        }
-
-        $workflow = $selection->workflow();
         $session = $this->sessionMapper->map($event);
         try {
+            $agent = $this->agentProfileProvider->profile();
             $run = $this->sessionStore->recordRun(
                 $session,
                 sprintf('Slack event %s from user %s.', $event->eventId(), $event->userId()),
                 $this->threadContextProvider->contextFor($event),
-                $workflow,
+                $agent,
                 $event->eventId(),
                 $event->userId(),
             );
-        } catch (\InvalidArgumentException $exception) {
+        } catch (\InvalidArgumentException|\RuntimeException $exception) {
             $message = $exception->getMessage();
             $this->notifier->showTyping($event);
             $this->notifier->postProgress($event, $message);
             $this->logger?->warning('Rejected Slack run during configuration validation.', [
                 'event_id' => $event->eventId(),
-                'workflow' => $workflow->name(),
                 'error' => $message,
             ]);
 
@@ -96,8 +86,7 @@ final readonly class SlackInteractionHandler
         }
 
         $message = sprintf(
-            'Accepted workflow `%s`. I will continue this Slack thread as session `%s`.',
-            $workflow->name(),
+            'Accepted by the generic agent. I will continue this Slack thread as session `%s`.',
             $session->threadId(),
         );
 

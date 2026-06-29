@@ -14,6 +14,7 @@ final readonly class AgentRunnerInput
         private array $environment,
         private int $timeoutSeconds,
         private string $runnerMode,
+        private ?AgentRunnerProgressSink $progressSink = null,
     ) {
     }
 
@@ -48,5 +49,10 @@ final readonly class AgentRunnerInput
     public function runnerMode(): string
     {
         return $this->runnerMode;
+    }
+
+    public function progressSink(): ?AgentRunnerProgressSink
+    {
+        return $this->progressSink;
     }
 }

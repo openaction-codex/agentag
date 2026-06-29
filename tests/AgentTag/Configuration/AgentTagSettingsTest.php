@@ -12,13 +12,12 @@ final class AgentTagSettingsTest extends TestCase
         $settings = new AgentTagSettings(
             '@Codex',
             '/srv/agentag/workspace',
-            '/srv/agentag/workspace/workflows',
             '',
         );
 
         self::assertSame('@Codex', $settings->tag());
         self::assertSame('/srv/agentag/workspace', $settings->workspacePath());
-        self::assertSame('/srv/agentag/workspace/workflows', $settings->workflowsPath());
+        self::assertSame(1200, $settings->runTimeoutSeconds());
         self::assertCount(0, $settings->repositories());
     }
 
@@ -30,7 +29,6 @@ final class AgentTagSettingsTest extends TestCase
         new AgentTagSettings(
             'Codex',
             '/srv/agentag/workspace',
-            '/srv/agentag/workspace/workflows',
             '',
         );
     }

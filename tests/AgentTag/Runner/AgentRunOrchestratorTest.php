@@ -45,7 +45,8 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
         $session = new ChatSession('mattermost:team:channel:root', 'mattermost', 'team', 'channel', 'root', new \DateTimeImmutable());
-        $run = new AgentRun($session, 'accepted', new \DateTimeImmutable(), 'input');
+        $sessionWorkspace = $this->workspaceDirectory.'/runs/session-root';
+        $run = new AgentRun($session, 'accepted', new \DateTimeImmutable(), 'input', workspacePath: $sessionWorkspace);
         $entityManager->persist($session);
         $entityManager->persist($run);
         $entityManager->flush();
@@ -53,7 +54,7 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         $fakeRunner = new FakeAgentRunner();
         $orchestrator = new AgentRunOrchestrator(
             $fakeRunner,
-            new WorkspaceLayout($this->workspaceDirectory, $this->workspaceDirectory.'/workflows'),
+            new WorkspaceLayout($this->workspaceDirectory.'/workspace'),
             new SensitiveTextRedactor(),
             $entityManager,
             new RunEventRecorder($entityManager, new SensitiveTextRedactor(), new NullLogger()),
@@ -64,7 +65,7 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         self::assertSame('completed', $run->status());
         self::assertSame('done with token=[REDACTED]', $run->outputSummary());
         self::assertStringContainsString('stdout: stdout token=[REDACTED]', (string) $run->logSummary());
-        self::assertSame($this->workspaceDirectory.'/runs/run-123', $run->workspacePath());
+        self::assertSame($sessionWorkspace, $run->workspacePath());
         self::assertSame(['/tmp/artifact.txt'], $run->artifacts());
         self::assertSame(0, $run->exitCode());
         self::assertSame(10, $run->inputTokens());
@@ -86,7 +87,7 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         self::assertSame(5, $storedSession->outputTokens());
         self::assertSame(15, $storedSession->totalTokens());
         self::assertNotNull($fakeRunner->input);
-        self::assertSame($this->workspaceDirectory.'/runs/run-123', $fakeRunner->input->workingDirectory());
+        self::assertSame($sessionWorkspace, $fakeRunner->input->workingDirectory());
         self::assertSame($this->workspaceDirectory.'/artifacts/run-123', $fakeRunner->input->artifactsDirectory());
     }
 

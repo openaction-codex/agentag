@@ -35,9 +35,9 @@ final class AgentRunCrudController extends ReadOnlyCrudController
         yield AssociationField::new('session')->setCrudController(ChatSessionCrudController::class);
         yield TextField::new('status');
         yield DateTimeField::new('createdAt', 'Created');
-        yield TextField::new('workflowName', 'Workflow')->hideOnDetail();
-        yield TextField::new('workflowVersion', 'Workflow version')->onlyOnDetail();
-        yield TextField::new('workflowRevision', 'Workflow revision')->onlyOnDetail();
+        yield TextField::new('workflowName', 'Agent')->hideOnDetail();
+        yield TextField::new('workflowVersion', 'Agent version')->onlyOnDetail();
+        yield TextField::new('workflowRevision', 'Workspace revision')->onlyOnDetail();
         yield TextField::new('requesterId', 'Requester')->hideOnIndex();
         yield TextField::new('sourceEventId', 'Source event')->hideOnIndex();
         yield TextField::new('workspaceCleanupState', 'Workspace cleanup');

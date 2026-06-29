@@ -4,7 +4,10 @@ namespace App\AgentTag\Runner;
 
 interface RunnerProcess
 {
-    public function run(): int;
+    /**
+     * @param callable(string, string): void|null $callback
+     */
+    public function run(?callable $callback = null): int;
 
     public function exitCode(): int;
 

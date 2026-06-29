@@ -2,13 +2,13 @@
 
 namespace App\Tests\AgentTag\Session;
 
+use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Chat\ChatSessionReference;
 use App\AgentTag\Memory\GlobalMemoryCommandContext;
 use App\AgentTag\Memory\GlobalMemoryService;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Session\ChatThreadContext;
 use App\AgentTag\Session\ChatThreadMessage;
-use App\AgentTag\Workflow\WorkflowDefinition;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use App\Tests\RefreshDatabaseTrait;
@@ -24,28 +24,24 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
     {
         self::bootKernel();
         $this->refreshDatabase();
-        $this->writeTestTool();
+        $this->prepareWorkspaceTemplate();
     }
 
     public function testItCreatesOneSessionAndAppendsRunsForTheSameThread(): void
     {
         $store = static::getContainer()->get(ChatSessionStore::class);
         self::assertInstanceOf(ChatSessionStore::class, $store);
+        $agent = $this->agent();
 
         $reference = new ChatSessionReference('mattermost', 'team-id', 'channel-id', 'root-id');
-        $workflow = WorkflowDefinition::fromArray(
-            ['name' => 'developer', 'version' => 'v1', 'tools' => ['git']],
-            '/tmp/developer.yaml',
-            'abc123',
-        );
 
         $store->recordRun($reference, 'first input token=secret-token', new ChatThreadContext([
             new ChatThreadMessage('root-id', 'user-a', '@Codex help password=hunter2'),
-        ]), $workflow);
+        ]), $agent);
         $store->recordRun($reference, 'second input', new ChatThreadContext([
             new ChatThreadMessage('root-id', 'user-a', '@Codex help'),
             new ChatThreadMessage('reply-id', 'user-b', 'continue with Bearer abcdefghijklmnop'),
-        ]), $workflow);
+        ]), $agent);
 
         $entityManager = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
@@ -62,16 +58,20 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         self::assertSame('team-id', $session->teamId());
         self::assertSame('channel-id', $session->channelId());
         self::assertSame('root-id', $session->threadId());
+        self::assertNotNull($session->workspacePath());
+        self::assertFileExists($session->workspacePath().'/AGENTS.md');
 
         self::assertSame($session, $runs[0]->session());
         self::assertSame('accepted', $runs[0]->status());
-        self::assertSame('developer', $runs[0]->workflowName());
-        self::assertSame('v1', $runs[0]->workflowVersion());
-        self::assertSame('abc123', $runs[0]->workflowRevision());
+        self::assertSame('agent', $runs[0]->workflowName());
+        self::assertNull($runs[0]->workflowVersion());
+        self::assertNull($runs[0]->workflowRevision());
+        self::assertSame($session->workspacePath(), $runs[0]->workspacePath());
+        self::assertSame($session->workspacePath(), $runs[1]->workspacePath());
         self::assertSame('first input token=[REDACTED]', $runs[0]->inputSummary());
-        self::assertStringContainsString('Workflow: developer', (string) $runs[0]->contextSnapshot());
-        self::assertStringContainsString('Workflow version: v1', (string) $runs[0]->contextSnapshot());
-        self::assertStringContainsString('Workflow revision: abc123', (string) $runs[0]->contextSnapshot());
+        self::assertStringContainsString('Agent: agent', (string) $runs[0]->contextSnapshot());
+        self::assertStringContainsString('Workspace template:', (string) $runs[0]->contextSnapshot());
+        self::assertStringContainsString('Session workspace: '.$session->workspacePath(), (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('Available tools:', (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('git (cli, non_sensitive, confirmation=default, sandbox=no_sandbox)', (string) $runs[0]->contextSnapshot());
         self::assertStringContainsString('Thread messages:', (string) $runs[0]->contextSnapshot());
@@ -98,7 +98,7 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
             new ChatSessionReference('mattermost', 'team-id', 'channel-id', 'root-id'),
             'input',
             new ChatThreadContext([new ChatThreadMessage('root-id', 'user-a', '@Codex help')]),
-            WorkflowDefinition::fromArray(['name' => 'developer', 'tools' => ['git']], '/tmp/developer.yaml'),
+            $this->agent(),
         );
 
         $entityManager = static::getContainer()->get(EntityManagerInterface::class);
@@ -109,14 +109,27 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         self::assertStringContainsString('- #1: Prefer small implementation commits.', (string) $runs[0]->contextSnapshot());
     }
 
-    private function writeTestTool(): void
+    private function agent(): \App\AgentTag\Agent\AgentProfile
+    {
+        $provider = static::getContainer()->get(AgentProfileProvider::class);
+        self::assertInstanceOf(AgentProfileProvider::class, $provider);
+
+        return $provider->profile();
+    }
+
+    private function prepareWorkspaceTemplate(): void
     {
         $projectDirectory = static::getContainer()->getParameter('kernel.project_dir');
         if (!is_string($projectDirectory)) {
             throw new \LogicException('Kernel project directory must be available.');
         }
 
-        $toolDirectory = $projectDirectory.'/var/test-workflows/tools';
+        $workspacePath = $projectDirectory.'/var/test-workspace';
+        $this->removeDirectory($workspacePath);
+        mkdir($workspacePath.'/tools', 0777, true);
+        file_put_contents($workspacePath.'/AGENTS.md', 'Use the shared workspace instructions.');
+
+        $toolDirectory = $workspacePath.'/tools';
         if (!is_dir($toolDirectory)) {
             mkdir($toolDirectory, 0777, true);
         }
@@ -125,13 +138,33 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
 name: git
 type: cli
 command: git
-allowed_workflows:
-    - developer
 working_directory: codebase
 timeout_seconds: 120
 sensitivity: non_sensitive
 sandbox: no_sandbox
 YAML);
+    }
+
+    private function removeDirectory(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
+        }
+
+        $files = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($path, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+
+        foreach ($files as $file) {
+            if (!$file instanceof \SplFileInfo) {
+                continue;
+            }
+
+            $file->isDir() ? rmdir($file->getPathname()) : unlink($file->getPathname());
+        }
+
+        rmdir($path);
     }
 
     private function memoryService(): GlobalMemoryService

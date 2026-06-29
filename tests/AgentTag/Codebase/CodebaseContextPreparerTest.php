@@ -8,7 +8,6 @@ use App\AgentTag\Codebase\RepositoryResolver;
 use App\AgentTag\Configuration\AgentTagSettings;
 use App\AgentTag\Runner\ProcessFactory;
 use App\AgentTag\Runner\RunnerProcess;
-use App\AgentTag\Workflow\WorkflowDefinition;
 use App\AgentTag\Workspace\WorkspaceLayout;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
@@ -30,43 +29,41 @@ final class CodebaseContextPreparerTest extends TestCase
         $this->removeDirectory($this->workspaceDirectory);
     }
 
-    public function testItClonesWorkflowRepositoriesIntoPerRunCodebaseDirectory(): void
+    public function testItClonesConfiguredRepositoriesIntoSessionWorkspaceCodebaseDirectory(): void
     {
         $factory = new TraceableGitProcessFactory();
+        $workspaceTemplate = $this->workspaceDirectory.'/workspace';
+        $sessionWorkspace = $this->workspaceDirectory.'/runs/session-a';
+        mkdir($sessionWorkspace, 0777, true);
         $settings = new AgentTagSettings(
             '@Codex',
-            $this->workspaceDirectory,
-            $this->workspaceDirectory.'/workflows',
+            $workspaceTemplate,
             'git@github.com:openaction-codex/agentag.git',
         );
         $preparer = new CodebaseContextPreparer(
             new RepositoryResolver($settings),
-            new GitRepositoryCloner($factory, new WorkspaceLayout($settings->workspacePath(), $settings->workflowsPath())),
+            new GitRepositoryCloner($factory, new WorkspaceLayout($settings->workspacePath())),
         );
-        $workflow = WorkflowDefinition::fromArray([
-            'name' => 'developer',
-            'repositories' => ['openaction-codex-agentag'],
-        ], '/tmp/developer.yaml');
         $run = new AgentRun(
             new ChatSession('mattermost:team:channel:thread', 'mattermost', 'team', 'channel', 'thread', new \DateTimeImmutable()),
             'accepted',
             new \DateTimeImmutable(),
         );
 
-        $context = $preparer->prepare($workflow, 'run-123', $run);
+        $context = $preparer->prepare($sessionWorkspace, $run);
 
         self::assertSame([
             'git',
             'clone',
             '--',
             'git@github.com:openaction-codex/agentag.git',
-            $this->workspaceDirectory.'/runs/run-123/codebase/openaction-codex-agentag',
+            $sessionWorkspace.'/codebase/openaction-codex-agentag',
         ], $factory->command);
-        self::assertSame($this->workspaceDirectory.'/runs/run-123', $factory->workingDirectory);
+        self::assertSame($sessionWorkspace, $factory->workingDirectory);
         self::assertStringContainsString('openaction-codex-agentag', $context->promptSection());
         self::assertStringContainsString('Cite relevant file paths', $context->promptSection());
         self::assertSame([
-            'openaction-codex-agentag' => $this->workspaceDirectory.'/runs/run-123/codebase/openaction-codex-agentag',
+            'openaction-codex-agentag' => $sessionWorkspace.'/codebase/openaction-codex-agentag',
         ], $run->repositoryClones());
         self::assertSame(['openaction-codex-agentag' => 'HEAD'], $run->repositoryBaseRefs());
         self::assertSame([], $run->repositoryBranches());
@@ -75,23 +72,21 @@ final class CodebaseContextPreparerTest extends TestCase
     public function testItUsesLocalMirrorsAsCloneReferencesOnly(): void
     {
         $factory = new TraceableGitProcessFactory();
+        $workspaceTemplate = $this->workspaceDirectory.'/workspace';
+        $sessionWorkspace = $this->workspaceDirectory.'/runs/session-a';
+        mkdir($sessionWorkspace, 0777, true);
         $settings = new AgentTagSettings(
             '@Codex',
-            $this->workspaceDirectory,
-            $this->workspaceDirectory.'/workflows',
+            $workspaceTemplate,
             'git@github.com:openaction-codex/agentag.git',
         );
         mkdir($this->workspaceDirectory.'/cache/repositories/openaction-codex-agentag.git', 0777, true);
         $preparer = new CodebaseContextPreparer(
             new RepositoryResolver($settings),
-            new GitRepositoryCloner($factory, new WorkspaceLayout($settings->workspacePath(), $settings->workflowsPath())),
+            new GitRepositoryCloner($factory, new WorkspaceLayout($settings->workspacePath())),
         );
-        $workflow = WorkflowDefinition::fromArray([
-            'name' => 'developer',
-            'repositories' => ['openaction-codex-agentag'],
-        ], '/tmp/developer.yaml');
 
-        $preparer->prepare($workflow, 'run-123');
+        $preparer->prepare($sessionWorkspace);
 
         self::assertSame([
             'git',
@@ -100,42 +95,42 @@ final class CodebaseContextPreparerTest extends TestCase
             $this->workspaceDirectory.'/cache/repositories/openaction-codex-agentag.git',
             '--',
             'git@github.com:openaction-codex/agentag.git',
-            $this->workspaceDirectory.'/runs/run-123/codebase/openaction-codex-agentag',
+            $sessionWorkspace.'/codebase/openaction-codex-agentag',
         ], $factory->command);
     }
 
-    public function testConcurrentRunsUseDistinctWorkingTreesForTheSameRepository(): void
+    public function testConcurrentSessionsUseDistinctWorkingTreesForTheSameRepository(): void
     {
         $factory = new TraceableGitProcessFactory();
+        $workspaceTemplate = $this->workspaceDirectory.'/workspace';
+        $firstWorkspace = $this->workspaceDirectory.'/runs/session-a';
+        $secondWorkspace = $this->workspaceDirectory.'/runs/session-b';
+        mkdir($firstWorkspace, 0777, true);
+        mkdir($secondWorkspace, 0777, true);
         $settings = new AgentTagSettings(
             '@Codex',
-            $this->workspaceDirectory,
-            $this->workspaceDirectory.'/workflows',
+            $workspaceTemplate,
             'git@github.com:openaction-codex/agentag.git',
         );
         $preparer = new CodebaseContextPreparer(
             new RepositoryResolver($settings),
-            new GitRepositoryCloner($factory, new WorkspaceLayout($settings->workspacePath(), $settings->workflowsPath())),
+            new GitRepositoryCloner($factory, new WorkspaceLayout($settings->workspacePath())),
         );
-        $workflow = WorkflowDefinition::fromArray([
-            'name' => 'developer',
-            'repositories' => ['openaction-codex-agentag'],
-        ], '/tmp/developer.yaml');
 
-        $first = $preparer->prepare($workflow, 'run-a');
-        $second = $preparer->prepare($workflow, 'run-b');
+        $first = $preparer->prepare($firstWorkspace);
+        $second = $preparer->prepare($secondWorkspace);
 
         self::assertCount(2, $factory->commands);
-        self::assertSame($this->workspaceDirectory.'/runs/run-a', $factory->workingDirectories[0]);
-        self::assertSame($this->workspaceDirectory.'/runs/run-b', $factory->workingDirectories[1]);
-        self::assertSame($this->workspaceDirectory.'/runs/run-a/codebase/openaction-codex-agentag', $factory->commands[0][4]);
-        self::assertSame($this->workspaceDirectory.'/runs/run-b/codebase/openaction-codex-agentag', $factory->commands[1][4]);
+        self::assertSame($firstWorkspace, $factory->workingDirectories[0]);
+        self::assertSame($secondWorkspace, $factory->workingDirectories[1]);
+        self::assertSame($firstWorkspace.'/codebase/openaction-codex-agentag', $factory->commands[0][4]);
+        self::assertSame($secondWorkspace.'/codebase/openaction-codex-agentag', $factory->commands[1][4]);
         self::assertNotSame($factory->commands[0][4], $factory->commands[1][4]);
         self::assertSame([
-            'openaction-codex-agentag' => $this->workspaceDirectory.'/runs/run-a/codebase/openaction-codex-agentag',
+            'openaction-codex-agentag' => $firstWorkspace.'/codebase/openaction-codex-agentag',
         ], $first->cloneMap());
         self::assertSame([
-            'openaction-codex-agentag' => $this->workspaceDirectory.'/runs/run-b/codebase/openaction-codex-agentag',
+            'openaction-codex-agentag' => $secondWorkspace.'/codebase/openaction-codex-agentag',
         ], $second->cloneMap());
         self::assertSame(['openaction-codex-agentag' => 'HEAD'], $first->baseRefMap());
         self::assertSame([], $first->branchMap());
@@ -198,7 +193,7 @@ final class TraceableGitProcessFactory implements ProcessFactory
 final readonly class SuccessfulGitProcess implements RunnerProcess
 {
     #[\Override]
-    public function run(): int
+    public function run(?callable $callback = null): int
     {
         return 0;
     }

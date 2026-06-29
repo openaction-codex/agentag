@@ -26,6 +26,6 @@ final class ConfiguredTagMentionDetectorTest extends TestCase
 
     private function settings(): AgentTagSettings
     {
-        return new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '');
+        return new AgentTagSettings('@Codex', '/tmp/workspace', '');
     }
 }

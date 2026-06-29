@@ -63,7 +63,7 @@ final readonly class CodebaseContext
     public function promptSection(): string
     {
         if ([] === $this->clones) {
-            return 'No repository context was requested for this workflow.';
+            return 'No repository context is configured for this agent.';
         }
 
         $lines = [

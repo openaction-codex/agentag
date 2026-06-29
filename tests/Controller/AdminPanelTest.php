@@ -67,8 +67,8 @@ final class AdminPanelTest extends WebTestCase
             'Implement the spec password=hunter2',
             'Done password=hunter2',
             '{"password":"hunter2"}',
-            'developer',
-            'v1',
+            'agent',
+            null,
             'abc123',
             'event-1',
             'user-1',
@@ -78,8 +78,8 @@ final class AdminPanelTest extends WebTestCase
 
         $memory = new GlobalMemory('Remember password=hunter2', $now, 'user-1', 'mattermost', 'thread', 'message');
         $event = new RunEvent($run, RunEvent::TYPE_PROGRESS_UPDATE, 'Progress password=hunter2', ['token' => 'secret123456789'], $now);
-        $approval = new ApprovalRequest($run, 'force_push', 'git', 'developer', 'user-1', 'Force push password=hunter2', ActionSensitivity::DESTRUCTIVE, $now);
-        $linearAudit = LinearWriteAudit::failed('comment', 'message', 'developer', 'user-1', 'OPE-1', 'Linear failed password=hunter2', $now);
+        $approval = new ApprovalRequest($run, 'force_push', 'git', 'agent', 'user-1', 'Force push password=hunter2', ActionSensitivity::DESTRUCTIVE, $now);
+        $linearAudit = LinearWriteAudit::failed('comment', 'message', 'agent', 'user-1', 'OPE-1', 'Linear failed password=hunter2', $now);
 
         $entityManager = $this->entityManager();
         $entityManager->persist($session);

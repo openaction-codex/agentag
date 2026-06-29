@@ -2,6 +2,7 @@
 
 namespace App\Tests\AgentTag\Linear;
 
+use App\AgentTag\Agent\AgentProfile;
 use App\AgentTag\Approval\ApprovalRequestService;
 use App\AgentTag\Configuration\AgentTagSettings;
 use App\AgentTag\Linear\LinearOperationPolicy;
@@ -10,7 +11,6 @@ use App\AgentTag\Linear\LinearToolUnavailableException;
 use App\AgentTag\Security\SensitiveTextRedactor;
 use App\AgentTag\Tool\ToolCatalog;
 use App\AgentTag\Tool\ToolDefinition;
-use App\AgentTag\Workflow\WorkflowDefinition;
 use App\Entity\ApprovalRequest;
 use App\Entity\LinearWriteAudit;
 use App\Tests\RefreshDatabaseTrait;
@@ -21,7 +21,7 @@ final class LinearToolServiceTest extends KernelTestCase
 {
     use RefreshDatabaseTrait;
 
-    private string $workflowDirectory;
+    private string $workspaceDirectory;
 
     #[\Override]
     protected function setUp(): void
@@ -29,14 +29,12 @@ final class LinearToolServiceTest extends KernelTestCase
         self::bootKernel();
         $this->refreshDatabase();
 
-        $this->workflowDirectory = sys_get_temp_dir().'/agentag-linear-workflows-'.bin2hex(random_bytes(6));
-        mkdir($this->workflowDirectory.'/tools', 0777, true);
-        file_put_contents($this->workflowDirectory.'/tools/linear.yaml', <<<'YAML'
+        $this->workspaceDirectory = sys_get_temp_dir().'/agentag-linear-workspace-'.bin2hex(random_bytes(6));
+        mkdir($this->workspaceDirectory.'/tools', 0777, true);
+        file_put_contents($this->workspaceDirectory.'/tools/linear.yaml', <<<'YAML'
 name: linear
 type: mcp
 server: linear
-allowed_workflows:
-    - developer
 sensitivity: non_sensitive
 YAML);
     }
@@ -44,24 +42,24 @@ YAML);
     #[\Override]
     protected function tearDown(): void
     {
-        foreach (glob($this->workflowDirectory.'/tools/*') ?: [] as $file) {
+        foreach (glob($this->workspaceDirectory.'/tools/*') ?: [] as $file) {
             unlink($file);
         }
 
-        if (is_dir($this->workflowDirectory.'/tools')) {
-            rmdir($this->workflowDirectory.'/tools');
+        if (is_dir($this->workspaceDirectory.'/tools')) {
+            rmdir($this->workspaceDirectory.'/tools');
         }
 
-        if (is_dir($this->workflowDirectory)) {
-            rmdir($this->workflowDirectory);
+        if (is_dir($this->workspaceDirectory)) {
+            rmdir($this->workspaceDirectory);
         }
 
         parent::tearDown();
     }
 
-    public function testItPreparesLinearIssueReadsWhenWorkflowAllowsTheTool(): void
+    public function testItPreparesLinearIssueReadsWhenWorkspaceConfiguresTheTool(): void
     {
-        $instruction = $this->service()->readIssue($this->workflow(), 'OPE-1114');
+        $instruction = $this->service()->readIssue($this->agent(), 'OPE-1114');
 
         self::assertSame(LinearOperationPolicy::READ_ISSUE, $instruction->operation());
         self::assertSame('OPE-1114', $instruction->targetIssueIdentifier());
@@ -72,19 +70,27 @@ YAML);
         self::assertStringContainsString('MCP server `linear`', $instruction->runnerInstruction());
     }
 
-    public function testItRejectsLinearRequestsWhenTheWorkflowDoesNotAllowTheTool(): void
+    public function testItRejectsLinearRequestsWhenWorkspaceDoesNotConfigureTheTool(): void
     {
-        $this->expectException(LinearToolUnavailableException::class);
-        $this->expectExceptionMessage('Linear tool is not enabled for workflow `product`.');
+        foreach (glob($this->workspaceDirectory.'/tools/*') ?: [] as $file) {
+            unlink($file);
+        }
 
-        $this->service()->readIssue($this->workflow('product'), 'OPE-1114');
+        $this->expectException(LinearToolUnavailableException::class);
+        $this->expectExceptionMessage('Linear tool is not configured in the workspace.');
+
+        $this->service()->readIssue($this->agent(), 'OPE-1114');
     }
 
-    public function testItDoesNotCreateApprovalRequestsForDisallowedLinearWrites(): void
+    public function testItDoesNotCreateApprovalRequestsWhenLinearToolIsMissing(): void
     {
+        foreach (glob($this->workspaceDirectory.'/tools/*') ?: [] as $file) {
+            unlink($file);
+        }
+
         try {
             $this->service()->prepareWrite(
-                $this->workflow('product'),
+                $this->agent(),
                 LinearOperationPolicy::REPLACE_DESCRIPTION,
                 'mattermost-post-1',
                 'user-1',
@@ -100,7 +106,7 @@ YAML);
     public function testItPreparesNonSensitiveWritesAndAuditsSuccess(): void
     {
         $instruction = $this->service()->prepareWrite(
-            $this->workflow(),
+            $this->agent(),
             LinearOperationPolicy::CREATE_COMMENT,
             'mattermost-post-1',
             'user-1',
@@ -113,7 +119,7 @@ YAML);
         self::assertSame(0, $this->entityCount(ApprovalRequest::class));
 
         $audit = $this->service()->recordWriteSuccess(
-            $this->workflow(),
+            $this->agent(),
             LinearOperationPolicy::CREATE_COMMENT,
             'mattermost-post-1',
             'user-1',
@@ -123,7 +129,7 @@ YAML);
 
         self::assertSame(LinearWriteAudit::STATUS_SUCCEEDED, $audit->status());
         self::assertSame('mattermost-post-1', $audit->sourceMessageId());
-        self::assertSame('developer', $audit->workflowName());
+        self::assertSame('agent', $audit->workflowName());
         self::assertSame('user-1', $audit->requesterId());
         self::assertSame('OPE-1114', $audit->targetIssueIdentifier());
         self::assertSame(['OPE-1114'], $audit->resultingIssueIdentifiers());
@@ -133,7 +139,7 @@ YAML);
     public function testItRequestsConfirmationBeforeReplacingLinearContent(): void
     {
         $instruction = $this->service()->prepareWrite(
-            $this->workflow(),
+            $this->agent(),
             LinearOperationPolicy::REPLACE_DESCRIPTION,
             'mattermost-post-1',
             'user-1',
@@ -151,7 +157,7 @@ YAML);
     public function testItAuditsFailuresWithRedactedChatSummary(): void
     {
         $audit = $this->service()->recordWriteFailure(
-            $this->workflow(),
+            $this->agent(),
             LinearOperationPolicy::CREATE_COMMENT,
             'mattermost-post-1',
             'user-1',
@@ -168,7 +174,7 @@ YAML);
     private function service(): LinearToolService
     {
         return new LinearToolService(
-            new ToolCatalog(new AgentTagSettings('@Codex', '/tmp/workspace', $this->workflowDirectory, '')),
+            new ToolCatalog(new AgentTagSettings('@Codex', $this->workspaceDirectory, '')),
             new LinearOperationPolicy(),
             new ApprovalRequestService($this->entityManager()),
             $this->entityManager(),
@@ -176,12 +182,9 @@ YAML);
         );
     }
 
-    private function workflow(string $name = 'developer'): WorkflowDefinition
+    private function agent(): AgentProfile
     {
-        return WorkflowDefinition::fromArray([
-            'name' => $name,
-            'tools' => ['linear'],
-        ], $this->workflowDirectory.'/'.$name.'.yaml');
+        return new AgentProfile('agent', $this->workspaceDirectory, null, 'codex-full-access', 1200);
     }
 
     /**

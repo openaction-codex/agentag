@@ -2,8 +2,9 @@
 
 namespace App\Command;
 
+use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Configuration\AgentTagSettings;
-use App\AgentTag\Workflow\WorkflowCatalog;
+use App\AgentTag\Tool\ToolCatalog;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -15,7 +16,8 @@ final class ValidateConfigCommand extends Command
 {
     public function __construct(
         private readonly AgentTagSettings $settings,
-        private readonly WorkflowCatalog $workflowCatalog,
+        private readonly AgentProfileProvider $agentProfileProvider,
+        private readonly ToolCatalog $toolCatalog,
     ) {
         parent::__construct();
     }
@@ -28,20 +30,26 @@ final class ValidateConfigCommand extends Command
         $io->title('AgentTag configuration');
         $io->definitionList(
             ['Tag' => $this->settings->tag()],
-            ['Workspace' => $this->settings->workspacePath()],
-            ['Workflows' => $this->settings->workflowsPath()],
+            ['Workspace template' => $this->settings->workspacePath()],
+            ['Runtime root' => \dirname($this->settings->workspacePath())],
             ['Repositories' => (string) count($this->settings->repositories())],
+            ['Run timeout' => (string) $this->settings->runTimeoutSeconds()],
         );
 
         try {
-            $workflows = $this->workflowCatalog->all();
+            $agent = $this->agentProfileProvider->profile();
+            $tools = $this->toolCatalog->all();
         } catch (\Throwable $exception) {
             $io->error($exception->getMessage());
 
             return Command::FAILURE;
         }
 
-        $io->success(sprintf('Configuration is valid. %d workflow(s) found.', count($workflows)));
+        $io->success(sprintf(
+            'Configuration is valid. Generic agent `%s` is ready with %d tool(s).',
+            $agent->name(),
+            count($tools),
+        ));
 
         return Command::SUCCESS;
     }

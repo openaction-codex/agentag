@@ -2,6 +2,8 @@
 
 namespace App\Tests\AgentTag\Slack;
 
+use App\AgentTag\Agent\AgentProfile;
+use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Chat\ChatSessionReference;
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InMemoryInboundEventIdempotencyStore;
@@ -14,9 +16,6 @@ use App\AgentTag\Slack\SlackInboundEvent;
 use App\AgentTag\Slack\SlackInteractionHandler;
 use App\AgentTag\Slack\SlackNotifier;
 use App\AgentTag\Slack\SlackSessionMapper;
-use App\AgentTag\Workflow\WorkflowDefinition;
-use App\AgentTag\Workflow\WorkflowSelection;
-use App\AgentTag\Workflow\WorkflowSelector;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use PHPUnit\Framework\TestCase;
@@ -28,13 +27,13 @@ final class SlackInteractionHandlerTest extends TestCase
         $notifier = new TraceableSlackNotifier();
         $sessionStore = new TraceableChatSessionStore();
         $handler = new SlackInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '/tmp/workspace/workflows', '')),
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '')),
             new SlackSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,
             $sessionStore,
             new CurrentSlackThreadContextProvider(),
-            new FixedWorkflowSelector(WorkflowSelection::selected($this->workflow())),
+            new FixedAgentProfileProvider(),
         );
 
         $firstResult = $handler->handle($this->event());
@@ -43,17 +42,12 @@ final class SlackInteractionHandlerTest extends TestCase
         self::assertTrue($firstResult->isHandled());
         self::assertFalse($secondResult->isHandled());
         self::assertSame(1, $notifier->typingCount);
-        self::assertSame(['Accepted workflow `developer`. I will continue this Slack thread as session `1700000000.000000`.'], $notifier->progressMessages);
+        self::assertSame(['Accepted by the generic agent. I will continue this Slack thread as session `1700000000.000000`.'], $notifier->progressMessages);
         self::assertSame(['slack:T123:C123:1700000000.000000'], $sessionStore->sessionKeys);
-        self::assertSame(['developer'], $sessionStore->workflowNames);
+        self::assertSame(['agent'], $sessionStore->agentNames);
         self::assertSame(['Ev123'], $sessionStore->sourceEventIds);
         self::assertSame(['U123'], $sessionStore->requesterIds);
         self::assertSame([['@Codex help']], $sessionStore->threadMessages);
-    }
-
-    private function workflow(): WorkflowDefinition
-    {
-        return WorkflowDefinition::fromArray(['name' => 'developer', 'version' => 'v1'], '/tmp/developer.yaml', 'abc123');
     }
 
     private function event(): SlackInboundEvent
@@ -81,7 +75,7 @@ final class TraceableChatSessionStore implements ChatSessionStore
     /**
      * @var list<string>
      */
-    public array $workflowNames = [];
+    public array $agentNames = [];
 
     /**
      * @var list<string|null>
@@ -103,12 +97,12 @@ final class TraceableChatSessionStore implements ChatSessionStore
         ChatSessionReference $reference,
         string $inputSummary,
         ChatThreadContext $threadContext,
-        WorkflowDefinition $workflow,
+        AgentProfile $agent,
         ?string $sourceEventId = null,
         ?string $requesterId = null,
     ): AgentRun {
         $this->sessionKeys[] = $reference->key();
-        $this->workflowNames[] = $workflow->name();
+        $this->agentNames[] = $agent->name();
         $this->sourceEventIds[] = $sourceEventId;
         $this->requesterIds[] = $requesterId;
         $this->threadMessages[] = array_map(
@@ -124,16 +118,12 @@ final class TraceableChatSessionStore implements ChatSessionStore
     }
 }
 
-final readonly class FixedWorkflowSelector implements WorkflowSelector
+final readonly class FixedAgentProfileProvider implements AgentProfileProvider
 {
-    public function __construct(private WorkflowSelection $selection)
-    {
-    }
-
     #[\Override]
-    public function select(string $message): WorkflowSelection
+    public function profile(): AgentProfile
     {
-        return $this->selection;
+        return new AgentProfile('agent', '/tmp/workspace', null, 'codex-full-access', 1200);
     }
 }
 

@@ -37,6 +37,8 @@ class ChatSession
         private \DateTimeImmutable $lastActivityAt,
         #[ORM\Column(type: 'text', nullable: true)]
         private ?string $summary = null,
+        #[ORM\Column(type: 'text', nullable: true)]
+        private ?string $workspacePath = null,
     ) {
         $this->runs = new ArrayCollection();
     }
@@ -79,6 +81,11 @@ class ChatSession
     public function lastActivityAt(): \DateTimeImmutable
     {
         return $this->lastActivityAt;
+    }
+
+    public function workspacePath(): ?string
+    {
+        return $this->workspacePath;
     }
 
     /**
@@ -129,6 +136,11 @@ class ChatSession
         return $this->lastActivityAt();
     }
 
+    public function getWorkspacePath(): ?string
+    {
+        return $this->workspacePath();
+    }
+
     /**
      * @return Collection<int, AgentRun>
      */
@@ -161,6 +173,11 @@ class ChatSession
     public function touch(\DateTimeImmutable $now): void
     {
         $this->lastActivityAt = $now;
+    }
+
+    public function assignWorkspacePath(string $workspacePath): void
+    {
+        $this->workspacePath = $workspacePath;
     }
 
     public function inputTokens(): int

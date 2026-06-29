@@ -77,7 +77,7 @@ final class CleanupWorkspaceCommand extends Command
     {
         $threshold = time() - ($olderThanDays * 86400);
         $paths = [];
-        foreach ([$this->workspaceLayout->runsPath(), $this->workspaceLayout->workspacePath().'/artifacts'] as $basePath) {
+        foreach ([$this->workspaceLayout->runsPath(), $this->workspaceLayout->runtimeRootPath().'/artifacts'] as $basePath) {
             foreach (glob($basePath.'/*') ?: [] as $path) {
                 if (is_dir($path) && !is_link($path) && (filemtime($path) ?: time()) < $threshold) {
                     $paths[] = $path;

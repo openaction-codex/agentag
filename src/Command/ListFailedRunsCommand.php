@@ -44,7 +44,7 @@ final class ListFailedRunsCommand extends Command
             ];
         }
 
-        $io->table(['Run', 'Session', 'Workflow', 'Source event', 'Requester', 'Exit', 'Workspace', 'Summary'], $rows);
+        $io->table(['Run', 'Session', 'Agent', 'Source event', 'Requester', 'Exit', 'Workspace', 'Summary'], $rows);
 
         return Command::SUCCESS;
     }

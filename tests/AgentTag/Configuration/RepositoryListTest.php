@@ -10,7 +10,7 @@ final class RepositoryListTest extends TestCase
     public function testItParsesCommaSeparatedSshUrls(): void
     {
         $repositories = RepositoryList::fromCsv(
-            'git@github.com:openaction-codex/agentag.git, ssh://git@github.com/example-org/workflows.git',
+            'git@github.com:openaction-codex/agentag.git, ssh://git@github.com/example-org/api.git',
         );
 
         $items = iterator_to_array($repositories);
@@ -19,7 +19,7 @@ final class RepositoryListTest extends TestCase
         self::assertSame('openaction-codex-agentag', $items[0]->identifier());
         self::assertSame('agentag', $items[0]->displayName());
         self::assertSame('git@github.com:openaction-codex/agentag.git', $items[0]->url());
-        self::assertSame('example-org-workflows', $items[1]->identifier());
+        self::assertSame('example-org-api', $items[1]->identifier());
     }
 
     public function testItRejectsNonSshUrls(): void

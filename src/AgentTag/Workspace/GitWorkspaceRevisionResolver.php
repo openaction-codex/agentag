@@ -1,0 +1,21 @@
+<?php
+
+namespace App\AgentTag\Workspace;
+
+use Symfony\Component\Process\Process;
+
+final readonly class GitWorkspaceRevisionResolver implements WorkspaceRevisionResolver
+{
+    #[\Override]
+    public function revisionFor(string $workspaceDirectory): ?string
+    {
+        if (!is_dir($workspaceDirectory.'/.git')) {
+            return null;
+        }
+
+        $process = new Process(['git', '-C', $workspaceDirectory, 'rev-parse', '--short', 'HEAD']);
+        $process->run();
+
+        return 0 === $process->getExitCode() ? trim($process->getOutput()) : null;
+    }
+}

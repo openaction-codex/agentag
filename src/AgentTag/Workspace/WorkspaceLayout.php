@@ -6,10 +6,8 @@ final readonly class WorkspaceLayout
 {
     public function __construct(
         private string $workspacePath,
-        private string $workflowsPath,
     ) {
         $this->assertAbsolutePath($workspacePath, 'workspace path');
-        $this->assertAbsolutePath($workflowsPath, 'workflows path');
     }
 
     public function workspacePath(): string
@@ -17,14 +15,14 @@ final readonly class WorkspaceLayout
         return $this->normalize($this->workspacePath);
     }
 
-    public function workflowsPath(): string
+    public function runtimeRootPath(): string
     {
-        return $this->normalize($this->workflowsPath);
+        return \dirname($this->workspacePath());
     }
 
     public function runsPath(): string
     {
-        return $this->workspacePath().'/runs';
+        return $this->runtimeRootPath().'/runs';
     }
 
     public function runPath(string $runId): string
@@ -32,19 +30,31 @@ final readonly class WorkspaceLayout
         return $this->runsPath().'/'.$this->safeSegment($runId);
     }
 
+    public function sessionPath(string $sessionKey): string
+    {
+        return $this->runsPath().'/session-'.substr(sha1($sessionKey), 0, 16);
+    }
+
     public function codebasePath(string $runId, string $repositoryName): string
     {
         return $this->runPath($runId).'/codebase/'.$this->safeSegment($repositoryName);
     }
 
+    public function codebasePathForWorkspace(string $workspacePath, string $repositoryName): string
+    {
+        $this->assertAbsolutePath($workspacePath, 'session workspace path');
+
+        return $this->normalize($workspacePath).'/codebase/'.$this->safeSegment($repositoryName);
+    }
+
     public function artifactsPath(string $runId): string
     {
-        return $this->workspacePath().'/artifacts/'.$this->safeSegment($runId);
+        return $this->runtimeRootPath().'/artifacts/'.$this->safeSegment($runId);
     }
 
     public function repositoryCachePath(): string
     {
-        return $this->workspacePath().'/cache/repositories';
+        return $this->runtimeRootPath().'/cache/repositories';
     }
 
     private function assertAbsolutePath(string $path, string $label): void

@@ -25,9 +25,16 @@ final readonly class AgentRunOrchestrator
     /**
      * @param array<string, string> $environment
      */
-    public function run(AgentRun $run, string $runIdentifier, string $prompt, string $runnerMode, int $timeoutSeconds, array $environment = []): AgentRunnerResult
-    {
-        $workingDirectory = $this->workspaceLayout->runPath($runIdentifier);
+    public function run(
+        AgentRun $run,
+        string $runIdentifier,
+        string $prompt,
+        string $runnerMode,
+        int $timeoutSeconds,
+        array $environment = [],
+        ?AgentRunnerProgressSink $progressSink = null,
+    ): AgentRunnerResult {
+        $workingDirectory = $run->workspacePath() ?? $this->workspaceLayout->runPath($runIdentifier);
         $artifactsDirectory = $this->workspaceLayout->artifactsPath($runIdentifier);
 
         if (!is_dir($workingDirectory)) {
@@ -58,6 +65,7 @@ final readonly class AgentRunOrchestrator
             $environment,
             $timeoutSeconds,
             $runnerMode,
+            $progressSink,
         ));
 
         $run->recordRunnerResult(

@@ -34,7 +34,7 @@ final class ApprovalRequestCrudController extends ReadOnlyCrudController
         yield AssociationField::new('run')->setCrudController(AgentRunCrudController::class);
         yield TextField::new('action');
         yield TextField::new('targetSystem', 'Target');
-        yield TextField::new('workflowName', 'Workflow');
+        yield TextField::new('workflowName', 'Agent');
         yield TextField::new('requesterId', 'Requester')->hideOnIndex();
         yield TextField::new('sensitivity');
         yield TextField::new('status');
