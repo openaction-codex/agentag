@@ -31,7 +31,7 @@ final class MattermostInteractionHandlerTest extends TestCase
         $sessionStore = new TraceableChatSessionStore();
         $messageBus = new TraceableMessageBus();
         $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '')),
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
             new MattermostSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,
@@ -60,7 +60,7 @@ final class MattermostInteractionHandlerTest extends TestCase
     {
         $notifier = new TraceableMattermostNotifier();
         $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '')),
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
             new MattermostSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,
@@ -81,7 +81,7 @@ final class MattermostInteractionHandlerTest extends TestCase
         $notifier = new TraceableMattermostNotifier();
         $sessionStore = new TraceableChatSessionStore();
         $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '')),
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
             new MattermostSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,

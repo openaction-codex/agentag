@@ -5,7 +5,6 @@ namespace App\Tests\Command;
 use App\AgentTag\Agent\WorkspaceAgentProfileProvider;
 use App\AgentTag\Configuration\AgentTagSettings;
 use App\AgentTag\Workspace\GitWorkspaceRevisionResolver;
-use App\Command\ListRepositoriesCommand;
 use App\Command\ValidateConfigCommand;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Command\Command;
@@ -51,23 +50,11 @@ final class AgentTagCommandTest extends TestCase
         self::assertStringContainsString('Generic agent `agent`', $tester->getDisplay());
     }
 
-    public function testListRepositoriesCommandShowsConfiguredRepositories(): void
-    {
-        $tester = new CommandTester(new ListRepositoriesCommand($this->settings()));
-
-        $exitCode = $tester->execute([]);
-
-        self::assertSame(Command::SUCCESS, $exitCode);
-        self::assertStringContainsString('openaction-codex-agentag', $tester->getDisplay());
-        self::assertStringContainsString('git@github.com:openaction-codex/agentag.git', $tester->getDisplay());
-    }
-
     private function settings(): AgentTagSettings
     {
         return new AgentTagSettings(
             '@Codex',
             $this->workspaceDirectory,
-            'git@github.com:openaction-codex/agentag.git',
         );
     }
 }

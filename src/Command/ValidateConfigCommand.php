@@ -30,7 +30,6 @@ final class ValidateConfigCommand extends Command
             ['Tag' => $this->settings->tag()],
             ['Workspace template' => $this->settings->workspacePath()],
             ['Runtime root' => \dirname($this->settings->workspacePath())],
-            ['Repositories' => (string) count($this->settings->repositories())],
             ['Run timeout' => (string) $this->settings->runTimeoutSeconds()],
         );
 

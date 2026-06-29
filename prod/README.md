@@ -66,7 +66,7 @@ codex login
 Create the runtime directories:
 
 ```bash
-mkdir -p /srv/agentag/app /srv/agentag/workspace /srv/agentag/runs /srv/agentag/cache/repositories /srv/agentag/artifacts
+mkdir -p /srv/agentag/app /srv/agentag/workspace /srv/agentag/runs /srv/agentag/artifacts
 ```
 
 Clone the app:
@@ -81,6 +81,7 @@ Create the workspace template. Put your real `AGENTS.md`, skills, Codex plugins,
 ```bash
 cat > /srv/agentag/workspace/AGENTS.md <<'EOF'
 Answer in the user's language. Keep Mattermost updates concise. Ask for confirmation before pushing main, force pushing, deleting, overwriting, or other destructive changes.
+Document available repositories and clone instructions here. Clone repositories into the session workspace when needed.
 EOF
 ```
 
@@ -97,7 +98,6 @@ MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0
 
 AGENTAG_TAG=@Codex
 AGENTAG_WORKSPACE_PATH=/srv/agentag/workspace
-AGENTAG_REPOSITORY_URLS=
 AGENTAG_CONTEXT_MAX_CHARS=12000
 AGENTAG_RUN_TIMEOUT_SECONDS=1200
 AGENTAG_REDACTION_PATTERNS=
@@ -128,13 +128,13 @@ Set write permissions. PHP-FPM needs write access for Symfony cache/logs and for
 ```bash
 mkdir -p /srv/agentag/app/var
 chown -R root:www-data /srv/agentag
-chown -R www-data:www-data /srv/agentag/app/var /srv/agentag/runs /srv/agentag/cache /srv/agentag/artifacts
+chown -R www-data:www-data /srv/agentag/app/var /srv/agentag/runs /srv/agentag/artifacts
 find /srv/agentag -type d -exec chmod 0750 {} \;
 find /srv/agentag -type f -exec chmod 0640 {} \;
 chmod +x /srv/agentag/app/bin/console
 ```
 
-Configure SSH for root so Codex and git clone operations can access repositories listed in `AGENTAG_REPOSITORY_URLS`.
+Configure SSH for root if your workspace `AGENTS.md` asks Codex to clone private repositories.
 
 ```bash
 mkdir -p /root/.ssh

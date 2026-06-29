@@ -12,7 +12,6 @@ The current foundation provides:
 - Mattermost and Slack webhook entrypoints with one session per chat thread.
 - A generic agent profile backed by a workspace template directory.
 - Per-session isolated workspaces copied from that template.
-- Configured repositories cloned over SSH into each session workspace under `codebase/`.
 - Codex CLI execution in full-access mode with streamed JSON progress events.
 - Mattermost typing indicators plus runner-generated progress/final messages.
 - Explicit-only global memories with list and delete by ID.
@@ -28,7 +27,7 @@ The current foundation provides:
 - PostgreSQL 16 or compatible.
 - Git and OpenSSH client tools.
 - Codex CLI installed and authenticated for the Unix user running workers.
-- Local SSH configuration that can clone every repository in `AGENTAG_REPOSITORY_URLS`.
+- Local SSH configuration if your workspace instructions ask Codex to clone private repositories.
 - Mattermost bot credentials for thread fetching, typing indicators, and progress posts.
 - A web process for Symfony and at least one Symfony Messenger worker.
 
@@ -50,7 +49,6 @@ MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0
 
 AGENTAG_TAG=@Codex
 AGENTAG_WORKSPACE_PATH=/srv/agentag/workspace
-AGENTAG_REPOSITORY_URLS=git@github.com:example/api.git,git@github.com:example/web.git
 AGENTAG_CONTEXT_MAX_CHARS=12000
 AGENTAG_RUN_TIMEOUT_SECONDS=1200
 AGENTAG_REDACTION_PATTERNS=
@@ -79,22 +77,12 @@ Recommended filesystem shape:
     .codex-plugin/             # optional Codex plugin files
     docs/                      # optional shared knowledge
   runs/session-<hash>/         # copied template for one chat thread
-    codebase/<repository-id>/  # per-session repository clones
-  cache/repositories/          # optional git reference cache
   artifacts/run-<id>/          # Codex last-message/artifacts
 ```
 
 You can version the workspace template however you prefer. AgentTag only needs the configured path to exist; it does not hard-code or fetch a workspace repository. The `.git` directory of the template is not copied into session workspaces.
 
-Repositories available to the agent are configured through `AGENTAG_REPOSITORY_URLS`. Values must be comma-separated SSH clone URLs usable by the local `git` CLI. AgentTag derives stable identifiers from URL paths; for example `git@github.com:openaction-codex/agentag.git` becomes `openaction-codex-agentag`.
-
-Each session gets independent clones under:
-
-```text
-/srv/agentag/runs/session-<hash>/codebase/<repository-id>
-```
-
-Working in one Mattermost thread therefore cannot mutate another thread's workspace. Cache mirrors under `/srv/agentag/cache/repositories` may speed up clones, but they are never used as active working copies.
+If Codex should work on company repositories, put the available SSH clone URLs and preferred clone layout directly in the workspace `AGENTS.md`. AgentTag copies the template per thread; any clone commands Codex runs happen inside that session workspace, so one thread cannot mutate another session workspace.
 
 ## Workspace Capabilities
 
@@ -154,7 +142,6 @@ Useful console commands:
 
 ```bash
 bin/console agentag:config:validate
-bin/console agentag:repositories:list
 bin/console agentag:runs:failed
 bin/console agentag:memories:list
 bin/console agentag:memories:delete <id>
@@ -166,7 +153,7 @@ bin/console agentag:workspace:cleanup --older-than-days=7
 
 ## Runner Model
 
-The webhook records an accepted run and dispatches it to Symfony Messenger. A worker consumes that message, prepares codebase clones, builds a generic prompt from the session context, and runs `CodexCliRunner`.
+The webhook records an accepted run and dispatches it to Symfony Messenger. A worker consumes that message, builds a generic prompt from the session context, and runs `CodexCliRunner` inside the isolated session workspace.
 
 The default runner invokes:
 
@@ -181,7 +168,7 @@ codex exec
 
 The generated prompt tells the agent to answer in the same language as the latest user message. Codex JSON progress messages are streamed into run events and, for Mattermost, posted back to the thread. The final Codex message is posted if it was not already posted as progress.
 
-Run records store status, redacted input/output/log summaries, context snapshot, workspace path, artifacts, repository clone/base/branch metadata, requester/source event IDs, exit code, and token counts when available. Session token totals are computed from linked runs.
+Run records store status, redacted input/output/log summaries, context snapshot, workspace path, artifacts, requester/source event IDs, exit code, and token counts when available. Session token totals are computed from linked runs.
 
 ## Mattermost Usage
 

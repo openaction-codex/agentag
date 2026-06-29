@@ -27,7 +27,7 @@ final class SlackInteractionHandlerTest extends TestCase
         $notifier = new TraceableSlackNotifier();
         $sessionStore = new TraceableChatSessionStore();
         $handler = new SlackInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace', '')),
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
             new SlackSessionMapper(),
             new InMemoryInboundEventIdempotencyStore(),
             $notifier,

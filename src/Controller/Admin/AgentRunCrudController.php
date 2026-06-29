@@ -50,9 +50,6 @@ final class AgentRunCrudController extends ReadOnlyCrudController
         yield $this->redactedTextField('contextSnapshot', 'Context snapshot')->onlyOnDetail();
         yield $this->redactedTextField('workspacePath', 'Workspace path')->onlyOnDetail();
         yield $this->redactedJsonField('artifacts')->onlyOnDetail();
-        yield $this->redactedJsonField('repositoryClones', 'Repository clones')->onlyOnDetail();
-        yield $this->redactedJsonField('repositoryBaseRefs', 'Repository base refs')->onlyOnDetail();
-        yield $this->redactedJsonField('repositoryBranches', 'Repository branches')->onlyOnDetail();
         yield $this->redactedTextField('logSummary', 'Log summary')->onlyOnDetail();
     }
 }

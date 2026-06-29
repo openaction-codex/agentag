@@ -4,12 +4,9 @@ namespace App\AgentTag\Configuration;
 
 final readonly class AgentTagSettings
 {
-    private RepositoryList $repositories;
-
     public function __construct(
         private string $tag,
         private string $workspacePath,
-        string $repositoryUrlsCsv,
         private int $runTimeoutSeconds = 1200,
     ) {
         $this->assertValidTag($tag);
@@ -17,8 +14,6 @@ final readonly class AgentTagSettings
         if ($runTimeoutSeconds < 1) {
             throw new \InvalidArgumentException('AgentTag run timeout must be a positive integer.');
         }
-
-        $this->repositories = RepositoryList::fromCsv($repositoryUrlsCsv);
     }
 
     public function tag(): string
@@ -34,11 +29,6 @@ final readonly class AgentTagSettings
     public function runTimeoutSeconds(): int
     {
         return $this->runTimeoutSeconds;
-    }
-
-    public function repositories(): RepositoryList
-    {
-        return $this->repositories;
     }
 
     private function assertValidTag(string $tag): void

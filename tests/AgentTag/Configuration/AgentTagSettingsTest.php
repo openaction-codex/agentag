@@ -12,13 +12,11 @@ final class AgentTagSettingsTest extends TestCase
         $settings = new AgentTagSettings(
             '@Codex',
             '/srv/agentag/workspace',
-            '',
         );
 
         self::assertSame('@Codex', $settings->tag());
         self::assertSame('/srv/agentag/workspace', $settings->workspacePath());
         self::assertSame(1200, $settings->runTimeoutSeconds());
-        self::assertCount(0, $settings->repositories());
     }
 
     public function testItRejectsInvalidTags(): void
@@ -29,7 +27,6 @@ final class AgentTagSettingsTest extends TestCase
         new AgentTagSettings(
             'Codex',
             '/srv/agentag/workspace',
-            '',
         );
     }
 }

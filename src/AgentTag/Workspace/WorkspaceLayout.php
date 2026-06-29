@@ -35,26 +35,9 @@ final readonly class WorkspaceLayout
         return $this->runsPath().'/session-'.substr(sha1($sessionKey), 0, 16);
     }
 
-    public function codebasePath(string $runId, string $repositoryName): string
-    {
-        return $this->runPath($runId).'/codebase/'.$this->safeSegment($repositoryName);
-    }
-
-    public function codebasePathForWorkspace(string $workspacePath, string $repositoryName): string
-    {
-        $this->assertAbsolutePath($workspacePath, 'session workspace path');
-
-        return $this->normalize($workspacePath).'/codebase/'.$this->safeSegment($repositoryName);
-    }
-
     public function artifactsPath(string $runId): string
     {
         return $this->runtimeRootPath().'/artifacts/'.$this->safeSegment($runId);
-    }
-
-    public function repositoryCachePath(): string
-    {
-        return $this->runtimeRootPath().'/cache/repositories';
     }
 
     private function assertAbsolutePath(string $path, string $label): void

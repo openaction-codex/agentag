@@ -2,12 +2,11 @@
 
 namespace App\AgentTag\Runner;
 
-use App\AgentTag\Codebase\CodebaseContext;
 use App\Entity\AgentRun;
 
 final readonly class AgentRunPromptBuilder
 {
-    public function build(AgentRun $run, CodebaseContext $codebaseContext): string
+    public function build(AgentRun $run): string
     {
         return trim(sprintf(
             <<<'PROMPT'
@@ -22,11 +21,8 @@ Interaction rules:
 
 Session context:
 %s
-
-%s
 PROMPT,
             $run->contextSnapshot() ?? '(none)',
-            $codebaseContext->promptSection(),
         ));
     }
 }

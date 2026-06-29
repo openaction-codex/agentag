@@ -3,7 +3,6 @@
 namespace App\MessageHandler;
 
 use App\AgentTag\Agent\AgentProfileProvider;
-use App\AgentTag\Codebase\CodebaseContextPreparer;
 use App\AgentTag\Mattermost\MattermostRunProgressSinkFactory;
 use App\AgentTag\Runner\AgentRunOrchestrator;
 use App\AgentTag\Runner\AgentRunPromptBuilder;
@@ -18,7 +17,6 @@ final readonly class RunAgentRunMessageHandler
     public function __construct(
         private EntityManagerInterface $entityManager,
         private AgentProfileProvider $agentProfileProvider,
-        private CodebaseContextPreparer $codebaseContextPreparer,
         private AgentRunPromptBuilder $promptBuilder,
         private AgentRunOrchestrator $orchestrator,
         private MattermostRunProgressSinkFactory $mattermostProgressSinkFactory,
@@ -38,7 +36,6 @@ final readonly class RunAgentRunMessageHandler
             throw new \RuntimeException(sprintf('Run #%d has no session workspace path.', $message->runId()));
         }
 
-        $codebaseContext = $this->codebaseContextPreparer->prepare($workspacePath, $run);
         $progressSink = 'mattermost' === $run->session()->platform()
             ? $this->mattermostProgressSinkFactory->create($run)
             : null;
@@ -46,7 +43,7 @@ final readonly class RunAgentRunMessageHandler
         $result = $this->orchestrator->run(
             $run,
             sprintf('run-%d', $message->runId()),
-            $this->promptBuilder->build($run, $codebaseContext),
+            $this->promptBuilder->build($run),
             $agent->runnerMode(),
             $agent->timeoutSeconds(),
             [],

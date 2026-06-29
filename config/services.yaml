@@ -25,7 +25,6 @@ services:
         arguments:
             $tag: '%env(string:AGENTAG_TAG)%'
             $workspacePath: '%env(resolve:AGENTAG_WORKSPACE_PATH)%'
-            $repositoryUrlsCsv: '%env(string:AGENTAG_REPOSITORY_URLS)%'
             $runTimeoutSeconds: '%env(int:AGENTAG_RUN_TIMEOUT_SECONDS)%'
 
     App\AgentTag\Security\SensitiveTextRedactor:

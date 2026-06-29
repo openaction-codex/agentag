@@ -15,9 +15,7 @@ final class WorkspaceLayoutTest extends TestCase
         self::assertSame('/srv/agentag', $layout->runtimeRootPath());
         self::assertSame('/srv/agentag/runs', $layout->runsPath());
         self::assertSame('/srv/agentag/runs/run-123', $layout->runPath('run-123'));
-        self::assertSame('/srv/agentag/runs/run-123/codebase/api', $layout->codebasePath('run-123', 'api'));
         self::assertSame('/srv/agentag/artifacts/run-123', $layout->artifactsPath('run-123'));
-        self::assertSame('/srv/agentag/cache/repositories', $layout->repositoryCachePath());
         self::assertSame('/srv/agentag/runs/session-'.substr(sha1('mattermost:team:channel:thread'), 0, 16), $layout->sessionPath('mattermost:team:channel:thread'));
     }
 

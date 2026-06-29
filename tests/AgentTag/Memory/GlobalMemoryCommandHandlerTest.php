@@ -73,7 +73,7 @@ final class GlobalMemoryCommandHandlerTest extends KernelTestCase
     private function handler(): GlobalMemoryCommandHandler
     {
         return new GlobalMemoryCommandHandler(
-            new AgentTagSettings('@Codex', '/tmp/workspace', ''),
+            new AgentTagSettings('@Codex', '/tmp/workspace'),
             $this->memoryService(),
         );
     }

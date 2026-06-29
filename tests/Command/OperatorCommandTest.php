@@ -2,7 +2,6 @@
 
 namespace App\Tests\Command;
 
-use App\AgentTag\Configuration\AgentTagSettings;
 use App\AgentTag\Memory\GlobalMemoryCommandContext;
 use App\AgentTag\Memory\GlobalMemoryService;
 use App\AgentTag\Workspace\WorkspaceLayout;
@@ -80,13 +79,12 @@ final class OperatorCommandTest extends KernelTestCase
         self::assertSame([], $this->memoryService()->all());
     }
 
-    public function testWorkspaceInspectShowsPathsAndRepositories(): void
+    public function testWorkspaceInspectShowsPaths(): void
     {
-        $tester = new CommandTester(new InspectWorkspaceCommand($this->workspaceLayout(), $this->settings()));
+        $tester = new CommandTester(new InspectWorkspaceCommand($this->workspaceLayout()));
 
         self::assertSame(Command::SUCCESS, $tester->execute([]));
         self::assertStringContainsString($this->workspaceDirectory, $tester->getDisplay());
-        self::assertStringContainsString('openaction-codex-agentag', $tester->getDisplay());
     }
 
     public function testWorkspaceCleanupIsDryRunUnlessForced(): void
@@ -129,15 +127,6 @@ final class OperatorCommandTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
         return $entityManager;
-    }
-
-    private function settings(): AgentTagSettings
-    {
-        return new AgentTagSettings(
-            '@Codex',
-            $this->workspaceDirectory.'/workspace',
-            'git@github.com:openaction-codex/agentag.git',
-        );
     }
 
     private function workspaceLayout(): WorkspaceLayout

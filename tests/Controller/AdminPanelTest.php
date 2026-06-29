@@ -73,7 +73,6 @@ final class AdminPanelTest extends WebTestCase
             'user-1',
         );
         $run->recordRunnerResult('completed', 'Done password=hunter2', 'log password=hunter2', '/tmp/agentag/run-1', ['artifact-password=hunter2'], 0, null);
-        $run->recordRepositoryClones(['repo' => '/tmp/agentag/run-1/repo'], ['repo' => 'main'], ['repo' => 'agentag/run-1']);
 
         $memory = new GlobalMemory('Remember password=hunter2', $now, 'user-1', 'mattermost', 'thread', 'message');
         $event = new RunEvent($run, RunEvent::TYPE_PROGRESS_UPDATE, 'Progress password=hunter2', ['token' => 'secret123456789'], $now);
