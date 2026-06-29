@@ -51,6 +51,9 @@ services:
     App\AgentTag\Workspace\WorkspaceRevisionResolver:
         alias: App\AgentTag\Workspace\GitWorkspaceRevisionResolver
 
+    App\AgentTag\Run\RunInterrupter:
+        alias: App\AgentTag\Run\AgentRunInterrupter
+
     App\AgentTag\Agent\AgentProfileProvider:
         alias: App\AgentTag\Agent\WorkspaceAgentProfileProvider
 

@@ -77,6 +77,27 @@ final class CodexCliRunnerTest extends TestCase
         self::assertSame(12, $tokenUsage->inputTokens());
         self::assertSame(8, $tokenUsage->outputTokens());
     }
+
+    public function testItStopsCodexWhenInterruptionIsRequested(): void
+    {
+        $factory = new TraceableProcessFactory();
+        $runner = new CodexCliRunner($factory);
+
+        $result = $runner->run(new AgentRunnerInput(
+            'Implement the task.',
+            $this->workingDirectory,
+            $this->artifactsDirectory,
+            [],
+            300,
+            'codex-full-access',
+            interruptionChecker: static fn (): bool => true,
+        ));
+
+        self::assertSame(130, $result->exitCode());
+        self::assertSame('Run interrupted by a newer message in this thread.', $result->finalMessage());
+        self::assertNotNull($factory->process);
+        self::assertTrue($factory->process->stopped);
+    }
 }
 
 final class TraceableProcessFactory implements ProcessFactory
@@ -97,6 +118,8 @@ final class TraceableProcessFactory implements ProcessFactory
 
     public int $timeoutSeconds = 0;
 
+    public ?FakeRunnerProcess $process = null;
+
     #[\Override]
     public function create(array $command, string $workingDirectory, array $environment, string $input, int $timeoutSeconds): RunnerProcess
     {
@@ -106,12 +129,20 @@ final class TraceableProcessFactory implements ProcessFactory
         $this->input = $input;
         $this->timeoutSeconds = $timeoutSeconds;
 
-        return new FakeRunnerProcess($command);
+        $this->process = new FakeRunnerProcess($command);
+
+        return $this->process;
     }
 }
 
-final readonly class FakeRunnerProcess implements RunnerProcess
+final class FakeRunnerProcess implements RunnerProcess
 {
+    public bool $stopped = false;
+
+    private bool $running = false;
+
+    private int $pollsRemaining = 0;
+
     /**
      * @param list<string> $command
      */
@@ -122,6 +153,17 @@ final readonly class FakeRunnerProcess implements RunnerProcess
     #[\Override]
     public function run(?callable $callback = null): int
     {
+        $this->start($callback);
+        $this->running = false;
+
+        return 0;
+    }
+
+    #[\Override]
+    public function start(?callable $callback = null): void
+    {
+        $this->running = true;
+        $this->pollsRemaining = 1;
         $outputPathIndex = array_search('--output-last-message', $this->command, true);
         if (is_int($outputPathIndex)) {
             file_put_contents($this->command[$outputPathIndex + 1], 'Final answer from Codex.');
@@ -129,8 +171,41 @@ final readonly class FakeRunnerProcess implements RunnerProcess
         if (null !== $callback) {
             $callback('out', "{\"type\":\"agent_message\",\"message\":\"Working on it.\"}\n");
         }
+    }
+
+    #[\Override]
+    public function wait(?callable $callback = null): int
+    {
+        $this->running = false;
 
         return 0;
+    }
+
+    #[\Override]
+    public function isRunning(): bool
+    {
+        if (!$this->running) {
+            return false;
+        }
+
+        if ($this->pollsRemaining > 0) {
+            --$this->pollsRemaining;
+
+            return true;
+        }
+
+        $this->running = false;
+
+        return false;
+    }
+
+    #[\Override]
+    public function stop(float $timeout = 10.0): int
+    {
+        $this->stopped = true;
+        $this->running = false;
+
+        return 130;
     }
 
     #[\Override]

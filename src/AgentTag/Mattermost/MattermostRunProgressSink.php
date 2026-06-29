@@ -71,11 +71,18 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
 
     private function formatMessage(string $message): string
     {
-        $message = preg_replace('/\s+/', ' ', trim($message)) ?? trim($message);
-        if (strlen($message) <= 1200) {
+        $message = trim(str_replace(["\r\n", "\r"], "\n", $message));
+        $message = preg_replace("/\n{4,}/", "\n\n\n", $message) ?? $message;
+
+        if (strlen($message) <= 4000) {
             return $message;
         }
 
-        return substr($message, 0, 1197).'...';
+        $message = rtrim(substr($message, 0, 3997)).'...';
+        if (1 === substr_count($message, '```') % 2) {
+            $message .= "\n```";
+        }
+
+        return $message;
     }
 }

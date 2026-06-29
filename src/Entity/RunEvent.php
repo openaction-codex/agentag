@@ -13,6 +13,7 @@ class RunEvent
     public const TYPE_RUNNER_STARTED = 'runner_started';
     public const TYPE_RUNNER_FINISHED = 'runner_finished';
     public const TYPE_TOKEN_USAGE = 'token_usage';
+    public const TYPE_INTERRUPTION_REQUESTED = 'interruption_requested';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]

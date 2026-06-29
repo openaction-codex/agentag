@@ -10,6 +10,13 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'agent_run')]
 class AgentRun
 {
+    public const STATUS_ACCEPTED = 'accepted';
+    public const STATUS_RUNNING = 'running';
+    public const STATUS_INTERRUPT_REQUESTED = 'interrupt_requested';
+    public const STATUS_INTERRUPTED = 'interrupted';
+    public const STATUS_COMPLETED = 'completed';
+    public const STATUS_FAILED = 'failed';
+
     public const WORKSPACE_CLEANUP_RETAINED = 'retained';
     public const WORKSPACE_CLEANUP_CLEANED = 'cleaned';
 
@@ -323,6 +330,41 @@ class AgentRun
         $this->inputTokens = $tokenUsage?->inputTokens();
         $this->outputTokens = $tokenUsage?->outputTokens();
         $this->totalTokens = $tokenUsage?->totalTokens();
+    }
+
+    public function markRunning(): void
+    {
+        $this->status = self::STATUS_RUNNING;
+    }
+
+    public function requestInterruption(): void
+    {
+        if ($this->isTerminal()) {
+            return;
+        }
+
+        $this->status = self::STATUS_INTERRUPT_REQUESTED;
+    }
+
+    public function markInterrupted(string $summary, ?string $workspacePath = null): void
+    {
+        $this->status = self::STATUS_INTERRUPTED;
+        $this->outputSummary = $summary;
+        $this->logSummary = $summary;
+        $this->exitCode = 130;
+        if (null !== $workspacePath) {
+            $this->workspacePath = $workspacePath;
+        }
+    }
+
+    public function interruptionRequested(): bool
+    {
+        return self::STATUS_INTERRUPT_REQUESTED === $this->status;
+    }
+
+    public function isTerminal(): bool
+    {
+        return in_array($this->status, [self::STATUS_COMPLETED, self::STATUS_FAILED, self::STATUS_INTERRUPTED], true);
     }
 
     public function markWorkspaceCleaned(): void

@@ -26,7 +26,18 @@ final readonly class RunAgentRunMessageHandler
     public function __invoke(RunAgentRunMessage $message): void
     {
         $run = $this->entityManager->getRepository(AgentRun::class)->find($message->runId());
-        if (!$run instanceof AgentRun || 'accepted' !== $run->status()) {
+        if (!$run instanceof AgentRun) {
+            return;
+        }
+
+        if ($run->interruptionRequested()) {
+            $run->markInterrupted('Run interrupted before the worker started it.', $run->workspacePath());
+            $this->entityManager->flush();
+
+            return;
+        }
+
+        if (AgentRun::STATUS_ACCEPTED !== $run->status()) {
             return;
         }
 
@@ -50,6 +61,8 @@ final readonly class RunAgentRunMessageHandler
             $progressSink,
         );
 
-        $progressSink?->finish($result);
+        if (130 !== $result->exitCode()) {
+            $progressSink?->finish($result);
+        }
     }
 }

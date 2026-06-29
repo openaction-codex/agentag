@@ -17,6 +17,30 @@ final readonly class SymfonyRunnerProcess implements RunnerProcess
     }
 
     #[\Override]
+    public function start(?callable $callback = null): void
+    {
+        $this->process->start($callback);
+    }
+
+    #[\Override]
+    public function wait(?callable $callback = null): int
+    {
+        return $this->process->wait($callback);
+    }
+
+    #[\Override]
+    public function isRunning(): bool
+    {
+        return $this->process->isRunning();
+    }
+
+    #[\Override]
+    public function stop(float $timeout = 10.0): int
+    {
+        return $this->process->stop($timeout) ?? 0;
+    }
+
+    #[\Override]
     public function exitCode(): int
     {
         return $this->process->getExitCode() ?? 1;

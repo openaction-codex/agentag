@@ -22,7 +22,7 @@ final class ListFailedRunsCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $runs = $this->entityManager->getRepository(AgentRun::class)->findBy(['status' => 'failed'], ['id' => 'DESC'], 50);
+        $runs = $this->entityManager->getRepository(AgentRun::class)->findBy(['status' => AgentRun::STATUS_FAILED], ['id' => 'DESC'], 50);
 
         if ([] === $runs) {
             $io->success('No failed runs found.');

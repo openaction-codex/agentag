@@ -48,6 +48,20 @@ final readonly class AgentRunOrchestrator
             'working_directory' => $workingDirectory,
             'artifacts_directory' => $artifactsDirectory,
         ]);
+        if ($run->interruptionRequested()) {
+            $run->markInterrupted('Run interrupted before the agent runner started.', $workingDirectory);
+            $this->entityManager->flush();
+            $this->runEventRecorder?->record($run, RunEvent::TYPE_RUNNER_FINISHED, 'Agent runner skipped because interruption was requested.', [
+                'status' => $run->status(),
+                'exit_code' => $run->exitCode(),
+                'workspace_path' => $workingDirectory,
+            ]);
+
+            return new AgentRunnerResult(130, '', '', '', [], null);
+        }
+
+        $run->markRunning();
+        $this->entityManager->flush();
         $this->runEventRecorder?->record($run, RunEvent::TYPE_RUNNER_STARTED, 'Started agent runner.', [
             'runner_mode' => $runnerMode,
             'timeout_seconds' => $timeoutSeconds,
@@ -66,11 +80,14 @@ final readonly class AgentRunOrchestrator
             $timeoutSeconds,
             $runnerMode,
             $progressSink,
+            fn (): bool => $this->interruptionRequested($run),
         ));
 
+        $status = $run->interruptionRequested() ? AgentRun::STATUS_INTERRUPTED : ($result->successful() ? AgentRun::STATUS_COMPLETED : AgentRun::STATUS_FAILED);
+        $summary = AgentRun::STATUS_INTERRUPTED === $status ? 'Run interrupted by a newer message in this thread.' : $result->finalMessage();
         $run->recordRunnerResult(
-            $result->successful() ? 'completed' : 'failed',
-            $this->redactor->redact($result->finalMessage()),
+            $status,
+            $this->redactor->redact($summary),
             $this->redactor->redact($this->logSummary($result)),
             $workingDirectory,
             array_map(static fn (AgentArtifact $artifact): string => $artifact->path(), $result->artifacts()),
@@ -110,5 +127,12 @@ final readonly class AgentRunOrchestrator
             $result->stdout(),
             $result->stderr(),
         ));
+    }
+
+    private function interruptionRequested(AgentRun $run): bool
+    {
+        $this->entityManager->refresh($run);
+
+        return $run->interruptionRequested();
     }
 }

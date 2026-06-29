@@ -126,7 +126,8 @@ APP_ENV=prod APP_DEBUG=0 composer install --no-dev --optimize-autoloader
 Set write permissions. PHP-FPM needs write access for Symfony cache/logs and for initial session workspace preparation. Codex itself is launched only by the root worker and can write anywhere root can write.
 
 ```bash
-mkdir -p /srv/agentag/app/var
+mkdir -p /srv/agentag/app/var/log
+touch /srv/agentag/app/var/log/prod.log
 chown -R root:www-data /srv/agentag
 chown -R www-data:www-data /srv/agentag/app/var /srv/agentag/runs /srv/agentag/artifacts
 find /srv/agentag -type d -exec chmod 0750 {} \;
@@ -225,9 +226,12 @@ Check logs:
 
 ```bash
 journalctl -u agentag-worker -f
+tail -f /srv/agentag/app/var/log/prod.log
 tail -f /var/log/nginx/agentag.error.log
 tail -f /var/log/php8.4-fpm-agentag.slow.log
 ```
+
+For an admin HTTP 500, check both `tail -f /srv/agentag/app/var/log/prod.log` and `journalctl -u php8.4-fpm -f` while reloading `/admin`.
 
 ## 5. Mattermost
 

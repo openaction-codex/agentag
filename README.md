@@ -176,6 +176,8 @@ Interaction model:
 
 - Mention `@Codex` in a root Mattermost message to start a new session.
 - Continue in the same Mattermost thread to keep context.
+- Post a new `@Codex ...` message in the same thread while a run is active to interrupt it and start a replacement run with the new thread context.
+- Post `@Codex stop` in the same thread to interrupt the active run without starting a replacement.
 - Start a new root message/thread for a new independent topic.
 - The webhook returns no canned acknowledgement for normal runs; the worker posts agent-generated progress and final messages.
 - The bot shows typing while a run is queued or posting progress.

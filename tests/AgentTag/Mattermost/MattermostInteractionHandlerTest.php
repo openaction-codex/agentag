@@ -13,6 +13,7 @@ use App\AgentTag\Mattermost\MattermostInteractionHandler;
 use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostSessionMapper;
 use App\AgentTag\Mattermost\MattermostThreadContextProvider;
+use App\AgentTag\Run\RunInterrupter;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Session\ChatThreadContext;
 use App\AgentTag\Session\ChatThreadMessage;
@@ -30,6 +31,7 @@ final class MattermostInteractionHandlerTest extends TestCase
         $notifier = new TraceableMattermostNotifier();
         $sessionStore = new TraceableChatSessionStore();
         $messageBus = new TraceableMessageBus();
+        $runInterrupter = new TraceableRunInterrupter();
         $handler = new MattermostInteractionHandler(
             new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
             new MattermostSessionMapper(),
@@ -39,6 +41,7 @@ final class MattermostInteractionHandlerTest extends TestCase
             new FixedMattermostThreadContextProvider(),
             new FixedAgentProfileProvider(),
             $messageBus,
+            $runInterrupter,
         );
 
         $firstResult = $handler->handle($this->event());
@@ -54,6 +57,61 @@ final class MattermostInteractionHandlerTest extends TestCase
         self::assertSame(['post'], $sessionStore->sourceEventIds);
         self::assertSame(['user'], $sessionStore->requesterIds);
         self::assertSame([['root text', '@Codex help']], $sessionStore->threadMessages);
+        self::assertSame(['mattermost:team:channel:post'], $runInterrupter->sessionKeys);
+    }
+
+    public function testItInterruptsTheActiveRunAndQueuesTheSteeringMessage(): void
+    {
+        $notifier = new TraceableMattermostNotifier();
+        $sessionStore = new TraceableChatSessionStore();
+        $messageBus = new TraceableMessageBus();
+        $runInterrupter = new TraceableRunInterrupter();
+        $runInterrupter->interruptCount = 1;
+        $handler = new MattermostInteractionHandler(
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
+            new MattermostSessionMapper(),
+            new InMemoryInboundEventIdempotencyStore(),
+            $notifier,
+            $sessionStore,
+            new FixedMattermostThreadContextProvider(),
+            new FixedAgentProfileProvider(),
+            $messageBus,
+            $runInterrupter,
+        );
+
+        $result = $handler->handle($this->event(text: '@Codex use the API module instead'));
+
+        self::assertTrue($result->isHandled());
+        self::assertSame([1], $messageBus->runIds);
+        self::assertSame(['mattermost:team:channel:post'], $sessionStore->sessionKeys);
+        self::assertSame(['post'], $runInterrupter->sourceEventIds);
+    }
+
+    public function testItInterruptsTheActiveRunWithoutQueueingAReplacementForStopCommands(): void
+    {
+        $notifier = new TraceableMattermostNotifier();
+        $sessionStore = new TraceableChatSessionStore();
+        $messageBus = new TraceableMessageBus();
+        $runInterrupter = new TraceableRunInterrupter();
+        $runInterrupter->interruptCount = 1;
+        $handler = new MattermostInteractionHandler(
+            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
+            new MattermostSessionMapper(),
+            new InMemoryInboundEventIdempotencyStore(),
+            $notifier,
+            $sessionStore,
+            new FixedMattermostThreadContextProvider(),
+            new FixedAgentProfileProvider(),
+            $messageBus,
+            $runInterrupter,
+        );
+
+        $result = $handler->handle($this->event(text: '@Codex stop'));
+
+        self::assertTrue($result->isHandled());
+        self::assertSame([], $messageBus->runIds);
+        self::assertSame([], $sessionStore->sessionKeys);
+        self::assertSame(['Interruption requested for the active run.'], $notifier->progressMessages);
     }
 
     public function testItReturnsConfigurationErrorsInChat(): void
@@ -68,6 +126,7 @@ final class MattermostInteractionHandlerTest extends TestCase
             new FixedMattermostThreadContextProvider(),
             new FixedAgentProfileProvider(),
             new TraceableMessageBus(),
+            new TraceableRunInterrupter(),
         );
 
         $result = $handler->handle($this->event());
@@ -89,6 +148,7 @@ final class MattermostInteractionHandlerTest extends TestCase
             new FixedMattermostThreadContextProvider(),
             new FixedAgentProfileProvider(),
             new TraceableMessageBus(),
+            new TraceableRunInterrupter(),
         );
 
         $result = $handler->handle($this->event(text: 'hello'));
@@ -231,6 +291,30 @@ final class TraceableMattermostNotifier implements MattermostNotifier
     public function postProgress(MattermostInboundEvent $event, string $message): void
     {
         $this->progressMessages[] = $message;
+    }
+}
+
+final class TraceableRunInterrupter implements RunInterrupter
+{
+    public int $interruptCount = 0;
+
+    /**
+     * @var list<string>
+     */
+    public array $sessionKeys = [];
+
+    /**
+     * @var list<string>
+     */
+    public array $sourceEventIds = [];
+
+    #[\Override]
+    public function interruptActiveRuns(ChatSessionReference $reference, string $sourceEventId, string $requesterId): int
+    {
+        $this->sessionKeys[] = $reference->key();
+        $this->sourceEventIds[] = $sourceEventId;
+
+        return $this->interruptCount;
     }
 }
 

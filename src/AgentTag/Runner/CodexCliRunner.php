@@ -37,7 +37,8 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
             $input->timeoutSeconds(),
         );
         $parser = new CodexJsonEventParser();
-        $process->run(function (string $type, string $buffer) use ($input, $parser): void {
+        $interrupted = false;
+        $callback = function (string $type, string $buffer) use ($input, $parser): void {
             if ('out' !== $type && !str_ends_with($type, 'OUT')) {
                 return;
             }
@@ -45,13 +46,37 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
             foreach ($parser->consume($buffer) as $progress) {
                 $input->progressSink()?->onProgress($progress);
             }
-        });
+        };
+
+        $process->start($callback);
+        while ($process->isRunning()) {
+            if ($input->interruptionRequested()) {
+                $interrupted = true;
+                $process->stop(5.0);
+                break;
+            }
+
+            usleep(250000);
+        }
+        $process->wait($callback);
+
         foreach ($parser->flush() as $progress) {
             $input->progressSink()?->onProgress($progress);
         }
 
         $stdout = $process->output();
         $stderr = $process->errorOutput();
+        if ($interrupted) {
+            return new AgentRunnerResult(
+                130,
+                'Run interrupted by a newer message in this thread.',
+                $stdout,
+                $stderr,
+                [],
+                $this->tokenUsageFromOutput($stdout),
+            );
+        }
+
         $finalMessage = is_file($lastMessagePath) ? trim((string) file_get_contents($lastMessagePath)) : trim($stdout);
 
         return new AgentRunnerResult(

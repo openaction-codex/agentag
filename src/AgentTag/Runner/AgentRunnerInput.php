@@ -15,6 +15,7 @@ final readonly class AgentRunnerInput
         private int $timeoutSeconds,
         private string $runnerMode,
         private ?AgentRunnerProgressSink $progressSink = null,
+        private ?\Closure $interruptionChecker = null,
     ) {
     }
 
@@ -54,5 +55,10 @@ final readonly class AgentRunnerInput
     public function progressSink(): ?AgentRunnerProgressSink
     {
         return $this->progressSink;
+    }
+
+    public function interruptionRequested(): bool
+    {
+        return null !== $this->interruptionChecker && ($this->interruptionChecker)();
     }
 }

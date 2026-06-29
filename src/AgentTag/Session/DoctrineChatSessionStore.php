@@ -76,7 +76,7 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
 
         $run = new AgentRun(
             $session,
-            'accepted',
+            AgentRun::STATUS_ACCEPTED,
             $now,
             $this->redactor->redact($inputSummary),
             null,

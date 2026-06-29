@@ -7,6 +7,7 @@ use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
 use App\AgentTag\Memory\GlobalMemoryCommandContext;
 use App\AgentTag\Memory\GlobalMemoryCommandHandler;
+use App\AgentTag\Run\RunInterrupter;
 use App\AgentTag\Session\ChatSessionStore;
 use App\Message\RunAgentRunMessage;
 use Psr\Log\LoggerInterface;
@@ -23,6 +24,7 @@ final readonly class MattermostInteractionHandler
         private MattermostThreadContextProvider $threadContextProvider,
         private AgentProfileProvider $agentProfileProvider,
         private MessageBusInterface $messageBus,
+        private RunInterrupter $runInterrupter,
         private ?GlobalMemoryCommandHandler $memoryCommandHandler = null,
         private ?LoggerInterface $logger = null,
     ) {
@@ -63,6 +65,16 @@ final readonly class MattermostInteractionHandler
         }
 
         $session = $this->sessionMapper->map($event);
+        $interruptedRuns = $this->runInterrupter->interruptActiveRuns($session, $event->eventId(), $event->userId());
+        if ($this->isStopCommand($event->text())) {
+            if ($interruptedRuns > 0) {
+                $this->notifier->showTyping($event);
+                $this->notifier->postProgress($event, 'Interruption requested for the active run.');
+            }
+
+            return MattermostInteractionResult::handled('');
+        }
+
         try {
             $agent = $this->agentProfileProvider->profile();
             $run = $this->sessionStore->recordRun(
@@ -99,5 +111,25 @@ final readonly class MattermostInteractionHandler
         ]);
 
         return MattermostInteractionResult::handled('');
+    }
+
+    private function isStopCommand(string $text): bool
+    {
+        $message = preg_replace('/^@[A-Za-z][A-Za-z0-9_-]{1,63}[:,]?\s*/', '', trim($text)) ?? trim($text);
+        $message = strtolower(trim($message));
+
+        return in_array($message, [
+            'stop',
+            'stop please',
+            'please stop',
+            'cancel',
+            'cancel run',
+            'interrupt',
+            'abort',
+            'arrete',
+            'arrête',
+            'annule',
+            'stoppe',
+        ], true);
     }
 }
