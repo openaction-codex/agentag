@@ -130,6 +130,7 @@ Set write permissions. PHP-FPM needs write access for Symfony cache/logs and for
 mkdir -p /srv/agentag/app/var/log
 touch /srv/agentag/app/var/log/prod.log
 chown -R root:www-data /srv/agentag
+chown -R root:www-data /srv/agentag/app/public
 chown -R www-data:www-data /srv/agentag/app/var /srv/agentag/runs /srv/agentag/artifacts
 find /srv/agentag -type d -exec chmod 0750 {} \;
 find /srv/agentag -type f -exec chmod 0640 {} \;
@@ -255,7 +256,11 @@ cd /srv/agentag/app
 git pull --ff-only
 APP_ENV=prod APP_DEBUG=0 composer install --no-dev --optimize-autoloader --no-scripts
 APP_ENV=prod APP_DEBUG=0 php8.4 bin/console assets:install public --no-interaction
+chown -R root:www-data /srv/agentag /srv/agentag/app/public
 chown -R www-data:www-data /srv/agentag/app/var /srv/agentag/runs /srv/agentag/artifacts
+find /srv/agentag -type d -exec chmod 0750 {} \;
+find /srv/agentag -type f -exec chmod 0640 {} \;
+chmod +x /srv/agentag/app/bin/console
 runuser -u www-data -- env APP_ENV=prod APP_DEBUG=0 php8.4 bin/console doctrine:migrations:migrate --no-interaction
 runuser -u www-data -- env APP_ENV=prod APP_DEBUG=0 php8.4 bin/console cache:clear
 ```
