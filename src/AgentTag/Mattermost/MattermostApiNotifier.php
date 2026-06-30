@@ -62,6 +62,29 @@ final class MattermostApiNotifier implements MattermostNotifier
 
         if (isset($payload['root_id']) && $this->isInvalidRootIdResponse($response)) {
             $rootId = $payload['root_id'];
+
+            $resolvedRootId = $this->resolveThreadRootId($event);
+            if (null !== $resolvedRootId && $resolvedRootId !== $rootId) {
+                $payload['root_id'] = $resolvedRootId;
+
+                $this->logger?->warning('Mattermost rejected a threaded post root; retrying with the root resolved from the source post.', [
+                    'channel_id' => $event->channelId(),
+                    'channel_type' => $event->channelType(),
+                    'root_id' => $rootId,
+                    'resolved_root_id' => $resolvedRootId,
+                    'source_post_id' => $event->postId(),
+                    'status_code' => $response['status_code'],
+                    'response_body' => $this->truncateResponseBody($response['body']),
+                ]);
+
+                $resolvedResponse = $this->requestWithChannelAccess($event, 'POST', '/api/v4/posts', $payload);
+                if (null === $resolvedResponse || $resolvedResponse['status_code'] < 400) {
+                    return;
+                }
+
+                $response = $resolvedResponse;
+            }
+
             unset($payload['root_id']);
 
             $this->logger?->warning('Mattermost rejected a threaded post root; retrying as a channel post.', [
@@ -148,6 +171,63 @@ final class MattermostApiNotifier implements MattermostNotifier
         ]);
 
         return false;
+    }
+
+    private function resolveThreadRootId(MattermostInboundEvent $event): ?string
+    {
+        if ('' === $event->postId()) {
+            return null;
+        }
+
+        $path = sprintf('/api/v4/posts/%s', rawurlencode($event->postId()));
+        $response = $this->requestWithChannelAccess($event, 'GET', $path, []);
+        if (null === $response || $response['status_code'] >= 400) {
+            $this->logFailedRequest('GET', $path, $response, [
+                'channel_id' => $event->channelId(),
+                'channel_type' => $event->channelType(),
+                'operation' => 'resolve_thread_root',
+            ]);
+
+            return null;
+        }
+
+        try {
+            $payload = json_decode($response['body'], true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            $this->logger?->warning('Mattermost API returned an invalid source post payload while resolving thread root.', [
+                'path' => $path,
+                'response_body' => $this->truncateResponseBody($response['body']),
+            ]);
+
+            return null;
+        }
+
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        $channelId = $payload['channel_id'] ?? null;
+        if (is_string($channelId) && '' !== $channelId && $channelId !== $event->channelId()) {
+            $this->logger?->warning('Mattermost source post channel does not match the inbound event channel.', [
+                'event_channel_id' => $event->channelId(),
+                'source_post_channel_id' => $channelId,
+                'source_post_id' => $event->postId(),
+            ]);
+
+            return null;
+        }
+
+        $rootId = $payload['root_id'] ?? null;
+        if (is_string($rootId) && '' !== trim($rootId)) {
+            return trim($rootId);
+        }
+
+        $postId = $payload['id'] ?? null;
+        if (is_string($postId) && '' !== trim($postId)) {
+            return trim($postId);
+        }
+
+        return null;
     }
 
     private function botUserId(): ?string

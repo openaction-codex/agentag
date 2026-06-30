@@ -76,6 +76,7 @@ final class MattermostApiNotifierTest extends TestCase
         $logger = new TraceableLogger();
         $responses = [
             new MockResponse('{"id":"api.post.create_post.root_id.app_error","message":"Invalid RootId parameter."}', ['http_code' => 400]),
+            new MockResponse('{"id":"post-id","root_id":"","channel_id":"channel-id"}'),
             new MockResponse('{"id":"fallback-post-id"}'),
         ];
         $httpClient = new MockHttpClient(static function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
@@ -97,15 +98,59 @@ final class MattermostApiNotifierTest extends TestCase
 
         self::assertSame([
             ['POST', 'https://mattermost.example.test/api/v4/posts'],
+            ['GET', 'https://mattermost.example.test/api/v4/posts/post-id'],
             ['POST', 'https://mattermost.example.test/api/v4/posts'],
         ], array_map(
             static fn (array $request): array => [$request['method'], $request['url']],
             $requests,
         ));
         self::assertSame(['channel_id' => 'channel-id', 'message' => 'Done', 'root_id' => 'post-id'], $requests[0]['body']);
-        self::assertSame(['channel_id' => 'channel-id', 'message' => 'Done'], $requests[1]['body']);
+        self::assertNull($requests[1]['body']);
+        self::assertSame(['channel_id' => 'channel-id', 'message' => 'Done'], $requests[2]['body']);
         self::assertSame('Mattermost rejected a threaded post root; retrying as a channel post.', $logger->records[0]['message']);
         self::assertSame('post-id', $logger->records[0]['context']['root_id']);
+    }
+
+    public function testItResolvesTheThreadRootFromTheSourcePostWhenMattermostRejectsTheStoredRoot(): void
+    {
+        $requests = [];
+        $logger = new TraceableLogger();
+        $responses = [
+            new MockResponse('{"id":"api.post.create_post.root_id.app_error","message":"Invalid RootId parameter."}', ['http_code' => 400]),
+            new MockResponse('{"id":"reply-id","root_id":"real-root-id","channel_id":"channel-id"}'),
+            new MockResponse('{"id":"threaded-post-id"}'),
+        ];
+        $httpClient = new MockHttpClient(static function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
+            $requests[] = [
+                'method' => $method,
+                'url' => $url,
+                'body' => self::requestBody($options),
+            ];
+
+            return array_shift($responses) ?? new MockResponse('', ['http_code' => 500]);
+        });
+        $notifier = new MattermostApiNotifier(
+            $httpClient,
+            new MattermostApiSettings('https://mattermost.example.test', 'bot-token', 20),
+            $logger,
+        );
+
+        $notifier->postProgress($this->threadReplyEvent(), 'Done');
+
+        self::assertSame([
+            ['POST', 'https://mattermost.example.test/api/v4/posts'],
+            ['GET', 'https://mattermost.example.test/api/v4/posts/reply-id'],
+            ['POST', 'https://mattermost.example.test/api/v4/posts'],
+        ], array_map(
+            static fn (array $request): array => [$request['method'], $request['url']],
+            $requests,
+        ));
+        self::assertSame(['channel_id' => 'channel-id', 'message' => 'Done', 'root_id' => 'bad-root-id'], $requests[0]['body']);
+        self::assertNull($requests[1]['body']);
+        self::assertSame(['channel_id' => 'channel-id', 'message' => 'Done', 'root_id' => 'real-root-id'], $requests[2]['body']);
+        self::assertSame('Mattermost rejected a threaded post root; retrying with the root resolved from the source post.', $logger->records[0]['message']);
+        self::assertSame('bad-root-id', $logger->records[0]['context']['root_id']);
+        self::assertSame('real-root-id', $logger->records[0]['context']['resolved_root_id']);
     }
 
     /**
@@ -162,6 +207,21 @@ final class MattermostApiNotifierTest extends TestCase
             '',
             'channel-id',
             'P',
+            'team-id',
+            'user-id',
+            '',
+        );
+    }
+
+    private function threadReplyEvent(): MattermostInboundEvent
+    {
+        return new MattermostInboundEvent(
+            'event-id',
+            '@Codex help',
+            'reply-id',
+            'bad-root-id',
+            'channel-id',
+            'O',
             'team-id',
             'user-id',
             '',
