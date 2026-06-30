@@ -3,7 +3,10 @@
 namespace App\MessageHandler;
 
 use App\AgentTag\Agent\AgentProfileProvider;
+use App\AgentTag\Mattermost\MattermostRunProgressSink;
 use App\AgentTag\Mattermost\MattermostRunProgressSinkFactory;
+use App\AgentTag\Run\AgentRunTurnGate;
+use App\AgentTag\Runner\AgentRunnerResult;
 use App\AgentTag\Runner\AgentRunOrchestrator;
 use App\AgentTag\Runner\AgentRunPromptBuilder;
 use App\Entity\AgentRun;
@@ -20,6 +23,7 @@ final readonly class RunAgentRunMessageHandler
         private AgentRunPromptBuilder $promptBuilder,
         private AgentRunOrchestrator $orchestrator,
         private MattermostRunProgressSinkFactory $mattermostProgressSinkFactory,
+        private AgentRunTurnGate $turnGate,
     ) {
     }
 
@@ -51,6 +55,12 @@ final readonly class RunAgentRunMessageHandler
             ? $this->mattermostProgressSinkFactory->create($run)
             : null;
 
+        if (!$this->turnGate->waitForTurn($run, $agent->timeoutSeconds() + 30, null === $progressSink ? null : $progressSink->onHeartbeat(...))) {
+            $this->handleRunThatCouldNotStart($run, $workspacePath, $progressSink);
+
+            return;
+        }
+
         $result = $this->orchestrator->run(
             $run,
             sprintf('run-%d', $message->runId()),
@@ -64,5 +74,25 @@ final readonly class RunAgentRunMessageHandler
         if (130 !== $result->exitCode()) {
             $progressSink?->finish($result);
         }
+    }
+
+    private function handleRunThatCouldNotStart(AgentRun $run, string $workspacePath, ?MattermostRunProgressSink $progressSink): void
+    {
+        if ($run->interruptionRequested()) {
+            $run->markInterrupted('Run interrupted before it could start in this thread.', $workspacePath);
+            $this->entityManager->flush();
+
+            return;
+        }
+
+        if ($run->isTerminal()) {
+            return;
+        }
+
+        $message = 'Run could not start because an earlier run in this thread is still active.';
+        $run->recordRunnerResult(AgentRun::STATUS_FAILED, $message, $message, $workspacePath, [], 1, null);
+        $this->entityManager->flush();
+
+        $progressSink?->finish(new AgentRunnerResult(1, $message, '', $message, [], null));
     }
 }

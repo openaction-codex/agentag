@@ -12,6 +12,7 @@ The current foundation provides:
 - Mattermost and Slack webhook entrypoints with one session per chat thread.
 - A generic agent profile backed by a workspace template directory.
 - Per-session isolated workspaces copied from that template.
+- Parallel worker support for simultaneous runs across different chat threads.
 - Codex CLI execution in full-access mode with streamed JSON progress events.
 - Mattermost typing indicators plus runner-generated progress/final messages.
 - Explicit-only global memories with list and delete by ID.
@@ -220,6 +221,8 @@ Configure `SLACK_VERIFICATION_TOKEN` if you use Slack's verification token flow.
 ## Production Deployment
 
 Host-based nginx + PHP-FPM deployment docs and config live in [prod/README.md](prod/README.md). That guide targets Ubuntu 24.04, runs outside Docker, assumes PostgreSQL already exists, and runs the Messenger worker as root so Codex and its child commands execute as root on the host.
+
+Production can run multiple `agentag-worker@N` instances to process different chat threads simultaneously. AgentTag keeps runs in the same chat thread serialized so multiple workers do not write to the same session workspace concurrently.
 
 ## Admin Panel
 

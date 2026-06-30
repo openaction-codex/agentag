@@ -7,9 +7,9 @@ The nginx and PHP-FPM settings are adapted from the `openaction/docker-php` PHP 
 - `prod/nginx/agentag.conf` -> `/etc/nginx/sites-available/agentag.conf`
 - `prod/php/agentag.ini` -> `/etc/php/8.4/fpm/conf.d/99-agentag.ini`
 - `prod/php-fpm/agentag.conf` -> `/etc/php/8.4/fpm/pool.d/agentag.conf`
-- `prod/systemd/agentag-worker.service` -> `/etc/systemd/system/agentag-worker.service`
+- `prod/systemd/agentag-worker@.service` -> `/etc/systemd/system/agentag-worker@.service`
 
-PHP-FPM runs web requests as `www-data` and only enqueues work. The Messenger worker runs as `root` with `HOME=/root` and `CODEX_HOME=/root/.codex`; it is the only production process that launches `codex exec`, so Codex and every command Codex starts run as root on the host. Keep `MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0` in production; using an in-memory/synchronous transport would execute runs inside PHP-FPM instead.
+PHP-FPM runs web requests as `www-data` and only enqueues work. Messenger workers run as `root` with `HOME=/root` and `CODEX_HOME=/root/.codex`; they are the only production processes that launch `codex exec`, so Codex and every command Codex starts run as root on the host. Keep `MESSENGER_TRANSPORT_DSN=doctrine://default?auto_setup=0` in production; using an in-memory/synchronous transport would execute runs inside PHP-FPM instead.
 
 ## 1. Install System Packages
 
@@ -160,7 +160,7 @@ Copy the provided configuration:
 cp /srv/agentag/app/prod/php/agentag.ini /etc/php/8.4/fpm/conf.d/99-agentag.ini
 cp /srv/agentag/app/prod/php-fpm/agentag.conf /etc/php/8.4/fpm/pool.d/agentag.conf
 cp /srv/agentag/app/prod/nginx/agentag.conf /etc/nginx/sites-available/agentag.conf
-cp /srv/agentag/app/prod/systemd/agentag-worker.service /etc/systemd/system/agentag-worker.service
+cp /srv/agentag/app/prod/systemd/agentag-worker@.service /etc/systemd/system/agentag-worker@.service
 ```
 
 Edit the nginx hostname:
@@ -210,16 +210,19 @@ systemctl enable --now php8.4-fpm
 systemctl restart php8.4-fpm
 systemctl enable --now nginx
 systemctl restart nginx
-systemctl enable --now agentag-worker
+systemctl disable --now agentag-worker || true
+systemctl enable --now agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4
 ```
+
+The four `agentag-worker@N` instances above allow four different chat threads to run at the same time. Adjust the number of instances to match the CPU, memory, and Codex/API capacity of the VPS. AgentTag still serializes runs inside a single chat thread so two workers do not write to the same session workspace concurrently.
 
 Check service state and HTTP endpoints:
 
 ```bash
 systemctl status php8.4-fpm --no-pager
 systemctl status nginx --no-pager
-systemctl status agentag-worker --no-pager
-systemctl show agentag-worker -p User -p Group -p Environment
+systemctl status agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4 --no-pager
+systemctl show agentag-worker@1 -p User -p Group -p Environment
 curl -i http://YOUR_DOMAIN_HERE/health
 curl -i http://YOUR_DOMAIN_HERE/ready
 ```
@@ -227,7 +230,7 @@ curl -i http://YOUR_DOMAIN_HERE/ready
 Check logs:
 
 ```bash
-journalctl -u agentag-worker -f
+journalctl -u agentag-worker@1 -u agentag-worker@2 -u agentag-worker@3 -u agentag-worker@4 -f
 tail -f /srv/agentag/app/var/log/prod.log
 tail -f /var/log/nginx/agentag.error.log
 tail -f /var/log/php8.4-fpm-agentag.slow.log
@@ -269,7 +272,7 @@ Restart services so PHP-FPM OPcache and the worker see the new code:
 
 ```bash
 systemctl restart php8.4-fpm
-systemctl restart agentag-worker
+systemctl restart agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4
 nginx -t && systemctl reload nginx
 ```
 
