@@ -36,13 +36,25 @@ final class AdminPanelTest extends WebTestCase
     public function testAdminPanelRejectsDirectWriteRoutes(): void
     {
         $client = $this->authenticatedClient();
-        $memoryId = $this->seedUsageData();
+        $ids = $this->seedUsageData();
 
         $client->request('GET', '/admin/global-memory/new');
         self::assertResponseStatusCodeSame(403);
 
-        $client->request('GET', sprintf('/admin/global-memory/%d/edit', $memoryId));
+        $client->request('GET', sprintf('/admin/global-memory/%d/edit', $ids['memoryId']));
         self::assertResponseStatusCodeSame(403);
+    }
+
+    public function testAdminPanelRendersRunEventMetadataAsRedactedJson(): void
+    {
+        $client = $this->authenticatedClient();
+        $ids = $this->seedUsageData();
+
+        $client->request('GET', sprintf('/admin/run-event/%d', $ids['eventId']));
+
+        self::assertResponseIsSuccessful();
+        self::assertStringContainsString('[REDACTED]', (string) $client->getResponse()->getContent());
+        self::assertStringNotContainsString('secret123456789', (string) $client->getResponse()->getContent());
     }
 
     private function authenticatedClient(): KernelBrowser
@@ -55,7 +67,10 @@ final class AdminPanelTest extends WebTestCase
         return $client;
     }
 
-    private function seedUsageData(): int
+    /**
+     * @return array{memoryId: int, eventId: int}
+     */
+    private function seedUsageData(): array
     {
         $now = new \DateTimeImmutable('2026-06-28T22:30:00+00:00');
         $session = new ChatSession('mattermost:team:channel:thread', 'mattermost', 'team', 'channel', 'thread', $now, 'Thread summary');
@@ -87,9 +102,14 @@ final class AdminPanelTest extends WebTestCase
         $entityManager->flush();
 
         $memoryId = $memory->id();
+        $eventId = $event->id();
         self::assertNotNull($memoryId);
+        self::assertNotNull($eventId);
 
-        return $memoryId;
+        return [
+            'memoryId' => $memoryId,
+            'eventId' => $eventId,
+        ];
     }
 
     private function entityManager(): EntityManagerInterface

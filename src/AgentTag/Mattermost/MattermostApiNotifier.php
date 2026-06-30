@@ -6,12 +6,14 @@ use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\Exception\TransportExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-final readonly class MattermostApiNotifier implements MattermostNotifier
+final class MattermostApiNotifier implements MattermostNotifier
 {
+    private ?string $botUserId = null;
+
     public function __construct(
-        private HttpClientInterface $httpClient,
-        private MattermostApiSettings $settings,
-        private ?LoggerInterface $logger = null,
+        private readonly HttpClientInterface $httpClient,
+        private readonly MattermostApiSettings $settings,
+        private readonly ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -28,7 +30,7 @@ final readonly class MattermostApiNotifier implements MattermostNotifier
             $payload['parent_id'] = $rootId;
         }
 
-        $this->request('POST', '/api/v4/users/me/typing', $payload);
+        $this->requestWithChannelAccess($event, 'POST', '/api/v4/users/me/typing', $payload);
     }
 
     #[\Override]
@@ -47,34 +49,177 @@ final readonly class MattermostApiNotifier implements MattermostNotifier
             $payload['root_id'] = $rootId;
         }
 
-        $this->request('POST', '/api/v4/posts', $payload);
+        $this->requestWithChannelAccess($event, 'POST', '/api/v4/posts', $payload);
     }
 
     /**
      * @param array<string, string> $payload
      */
-    private function request(string $method, string $path, array $payload): void
+    private function requestWithChannelAccess(MattermostInboundEvent $event, string $method, string $path, array $payload): void
+    {
+        $response = $this->request($method, $path, $payload);
+        if (null === $response || $response['status_code'] < 400) {
+            return;
+        }
+
+        if (403 === $response['status_code'] && 'O' === $event->channelType()) {
+            $this->logger?->info('Mattermost API request failed for a public channel; attempting to join before retrying.', [
+                'method' => $method,
+                'path' => $path,
+                'status_code' => $response['status_code'],
+                'channel_id' => $event->channelId(),
+            ]);
+
+            if ($this->joinPublicChannel($event->channelId())) {
+                $retryResponse = $this->request($method, $path, $payload);
+                if (null === $retryResponse || $retryResponse['status_code'] < 400) {
+                    return;
+                }
+
+                $this->logFailedRequest($method, $path, $retryResponse, [
+                    'channel_id' => $event->channelId(),
+                    'retry_after_public_channel_join' => true,
+                ]);
+
+                return;
+            }
+        }
+
+        $this->logFailedRequest($method, $path, $response, [
+            'channel_id' => $event->channelId(),
+            'channel_type' => $event->channelType(),
+        ]);
+    }
+
+    private function joinPublicChannel(string $channelId): bool
+    {
+        $botUserId = $this->botUserId();
+        if (null === $botUserId) {
+            return false;
+        }
+
+        $path = sprintf('/api/v4/channels/%s/members', rawurlencode($channelId));
+        $response = $this->request('POST', $path, ['user_id' => $botUserId]);
+        if (null !== $response && $response['status_code'] < 400) {
+            $this->logger?->info('Mattermost bot joined public channel before retrying request.', [
+                'channel_id' => $channelId,
+            ]);
+
+            return true;
+        }
+
+        $this->logFailedRequest('POST', $path, $response, [
+            'channel_id' => $channelId,
+            'operation' => 'join_public_channel',
+        ]);
+
+        return false;
+    }
+
+    private function botUserId(): ?string
+    {
+        if (null !== $this->botUserId) {
+            return $this->botUserId;
+        }
+
+        $response = $this->request('GET', '/api/v4/users/me');
+        if (null === $response || $response['status_code'] >= 400) {
+            $this->logFailedRequest('GET', '/api/v4/users/me', $response, [
+                'operation' => 'load_bot_user',
+            ]);
+
+            return null;
+        }
+
+        try {
+            $payload = json_decode($response['body'], true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            $this->logger?->warning('Mattermost API returned an invalid bot user payload.', [
+                'path' => '/api/v4/users/me',
+                'response_body' => $this->truncateResponseBody($response['body']),
+            ]);
+
+            return null;
+        }
+
+        if (!is_array($payload) || !is_string($payload['id'] ?? null) || '' === trim($payload['id'])) {
+            $this->logger?->warning('Mattermost API returned a bot user payload without an id.', [
+                'path' => '/api/v4/users/me',
+                'response_body' => $this->truncateResponseBody($response['body']),
+            ]);
+
+            return null;
+        }
+
+        $this->botUserId = trim($payload['id']);
+
+        return $this->botUserId;
+    }
+
+    /**
+     * @param array<string, string> $payload
+     *
+     * @return array{status_code: int, body: string}|null
+     */
+    private function request(string $method, string $path, array $payload = []): ?array
     {
         try {
-            $statusCode = $this->httpClient->request($method, $this->settings->baseUrl().$path, [
+            $options = [
                 'auth_bearer' => $this->settings->botToken(),
-                'json' => $payload,
                 'headers' => ['Accept' => 'application/json'],
-            ])->getStatusCode();
-
-            if ($statusCode >= 400) {
-                $this->logger?->warning('Mattermost API request failed.', [
-                    'method' => $method,
-                    'path' => $path,
-                    'status_code' => $statusCode,
-                ]);
+            ];
+            if ([] !== $payload) {
+                $options['json'] = $payload;
             }
+
+            $response = $this->httpClient->request($method, $this->settings->baseUrl().$path, $options);
+
+            return [
+                'status_code' => $response->getStatusCode(),
+                'body' => $response->getContent(false),
+            ];
         } catch (TransportExceptionInterface) {
             $this->logger?->warning('Mattermost API request failed due to a transport error.', [
                 'method' => $method,
                 'path' => $path,
             ]);
+
+            return null;
         }
+    }
+
+    /**
+     * @param array{status_code: int, body: string}|null $response
+     * @param array<string, mixed>                       $extraContext
+     */
+    private function logFailedRequest(string $method, string $path, ?array $response, array $extraContext = []): void
+    {
+        if (null === $response) {
+            return;
+        }
+
+        $context = [
+            'method' => $method,
+            'path' => $path,
+            'status_code' => $response['status_code'],
+            ...$extraContext,
+        ];
+
+        $responseBody = trim($response['body']);
+        if ('' !== $responseBody) {
+            $context['response_body'] = $this->truncateResponseBody($responseBody);
+        }
+
+        $this->logger?->warning('Mattermost API request failed.', $context);
+    }
+
+    private function truncateResponseBody(string $body): string
+    {
+        if (strlen($body) <= 2000) {
+            return $body;
+        }
+
+        return substr($body, 0, 2000).'...';
     }
 
     private function replyRootId(MattermostInboundEvent $event): string

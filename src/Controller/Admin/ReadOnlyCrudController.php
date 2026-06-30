@@ -11,6 +11,7 @@ use EasyCorp\Bundle\EasyAdminBundle\Config\KeyValueStore;
 use EasyCorp\Bundle\EasyAdminBundle\Context\AdminContext;
 use EasyCorp\Bundle\EasyAdminBundle\Controller\AbstractCrudController;
 use EasyCorp\Bundle\EasyAdminBundle\Dto\BatchActionDto;
+use EasyCorp\Bundle\EasyAdminBundle\Field\Field;
 use EasyCorp\Bundle\EasyAdminBundle\Field\TextareaField;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -90,9 +91,9 @@ abstract class ReadOnlyCrudController extends AbstractCrudController
         ;
     }
 
-    protected function redactedJsonField(string $property, ?string $label = null): TextareaField
+    protected function redactedJsonField(string $property, ?string $label = null): Field
     {
-        return TextareaField::new($property, $label)
+        return Field::new($property, $label)
             ->setTemplatePath('admin/field/redacted_text.html.twig')
             ->formatValue(fn (mixed $value): AdminRedactedValue => $this->formatRedactedValue($value))
         ;

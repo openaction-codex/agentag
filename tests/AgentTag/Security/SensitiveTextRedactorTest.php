@@ -24,6 +24,16 @@ final class SensitiveTextRedactorTest extends TestCase
         self::assertStringNotContainsString('ghp_abcdefghijklmnopqrstuvwxyz', $redacted);
     }
 
+    public function testItRedactsJsonSecretAssignments(): void
+    {
+        $redactor = new SensitiveTextRedactor();
+
+        $redacted = $redactor->redact('{"token": "secret123456789", "safe": "value"}');
+
+        self::assertSame('{"token": "[REDACTED]", "safe": "value"}', $redacted);
+        self::assertStringNotContainsString('secret123456789', $redacted);
+    }
+
     public function testItUsesConfiguredSensitivePatterns(): void
     {
         $redactor = new SensitiveTextRedactor('/project-[0-9]{4}/');

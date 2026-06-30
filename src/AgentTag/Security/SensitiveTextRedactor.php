@@ -4,7 +4,7 @@ namespace App\AgentTag\Security;
 
 final readonly class SensitiveTextRedactor
 {
-    private const SECRET_ASSIGNMENT_PATTERN = '/\b(?P<name>authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|passwd|pwd)\b(?P<spacing>\s*[:=]\s*)(?P<value>"[^"]*"|\'[^\']*\'|[^\s,;]+)/i';
+    private const SECRET_ASSIGNMENT_PATTERN = '/(?P<key_quote>["\']?)\b(?P<name>authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|passwd|pwd)\b(?P=key_quote)(?P<spacing>\s*[:=]\s*)(?P<value>"[^"]*"|\'[^\']*\'|[^\s,;}]+)/i';
 
     /**
      * @var array<string, string>
@@ -35,9 +35,12 @@ final readonly class SensitiveTextRedactor
         $redacted = preg_replace_callback(
             self::SECRET_ASSIGNMENT_PATTERN,
             static fn (array $matches): string => sprintf(
-                '%s%s[REDACTED]',
+                '%s%s%s%s%s',
+                self::stringMatch($matches, 'key_quote'),
                 self::stringMatch($matches, 'name'),
+                self::stringMatch($matches, 'key_quote'),
                 self::stringMatch($matches, 'spacing'),
+                self::redactedAssignmentValue(self::stringMatch($matches, 'value')),
             ),
             $text,
         );
@@ -129,6 +132,19 @@ final readonly class SensitiveTextRedactor
         if (!$isValid) {
             throw new \InvalidArgumentException(sprintf('Invalid AgentTag redaction pattern "%s".', $pattern));
         }
+    }
+
+    private static function redactedAssignmentValue(string $value): string
+    {
+        if (str_starts_with($value, '"') && str_ends_with($value, '"')) {
+            return '"[REDACTED]"';
+        }
+
+        if (str_starts_with($value, "'") && str_ends_with($value, "'")) {
+            return "'[REDACTED]'";
+        }
+
+        return '[REDACTED]';
     }
 
     /**
