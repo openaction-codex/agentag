@@ -55,7 +55,7 @@ final class MattermostApiNotifierTest extends TestCase
     {
         $logger = new TraceableLogger();
         $notifier = new MattermostApiNotifier(
-            new MockHttpClient(new MockResponse('{"id":"api.context.invalid_param.app_error","message":"Invalid root_id"}', ['http_code' => 400])),
+            new MockHttpClient(new MockResponse('{"id":"api.context.invalid_param.app_error","message":"Invalid payload"}', ['http_code' => 400])),
             new MattermostApiSettings('https://mattermost.example.test', 'bot-token', 20),
             $logger,
         );
@@ -67,7 +67,45 @@ final class MattermostApiNotifierTest extends TestCase
         self::assertSame(400, $logger->records[0]['context']['status_code']);
         $responseBody = $logger->records[0]['context']['response_body'] ?? null;
         self::assertIsString($responseBody);
-        self::assertStringContainsString('Invalid root_id', $responseBody);
+        self::assertStringContainsString('Invalid payload', $responseBody);
+    }
+
+    public function testItFallsBackToChannelPostsWhenMattermostRejectsTheThreadRoot(): void
+    {
+        $requests = [];
+        $logger = new TraceableLogger();
+        $responses = [
+            new MockResponse('{"id":"api.post.create_post.root_id.app_error","message":"Invalid RootId parameter."}', ['http_code' => 400]),
+            new MockResponse('{"id":"fallback-post-id"}'),
+        ];
+        $httpClient = new MockHttpClient(static function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
+            $requests[] = [
+                'method' => $method,
+                'url' => $url,
+                'body' => self::requestBody($options),
+            ];
+
+            return array_shift($responses) ?? new MockResponse('', ['http_code' => 500]);
+        });
+        $notifier = new MattermostApiNotifier(
+            $httpClient,
+            new MattermostApiSettings('https://mattermost.example.test', 'bot-token', 20),
+            $logger,
+        );
+
+        $notifier->postProgress($this->publicChannelEvent(), 'Done');
+
+        self::assertSame([
+            ['POST', 'https://mattermost.example.test/api/v4/posts'],
+            ['POST', 'https://mattermost.example.test/api/v4/posts'],
+        ], array_map(
+            static fn (array $request): array => [$request['method'], $request['url']],
+            $requests,
+        ));
+        self::assertSame(['channel_id' => 'channel-id', 'message' => 'Done', 'root_id' => 'post-id'], $requests[0]['body']);
+        self::assertSame(['channel_id' => 'channel-id', 'message' => 'Done'], $requests[1]['body']);
+        self::assertSame('Mattermost rejected a threaded post root; retrying as a channel post.', $logger->records[0]['message']);
+        self::assertSame('post-id', $logger->records[0]['context']['root_id']);
     }
 
     /**

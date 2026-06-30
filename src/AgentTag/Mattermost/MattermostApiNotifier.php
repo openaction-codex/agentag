@@ -30,7 +30,13 @@ final class MattermostApiNotifier implements MattermostNotifier
             $payload['parent_id'] = $rootId;
         }
 
-        $this->requestWithChannelAccess($event, 'POST', '/api/v4/users/me/typing', $payload);
+        $response = $this->requestWithChannelAccess($event, 'POST', '/api/v4/users/me/typing', $payload);
+        if (null !== $response && $response['status_code'] >= 400) {
+            $this->logFailedRequest('POST', '/api/v4/users/me/typing', $response, [
+                'channel_id' => $event->channelId(),
+                'channel_type' => $event->channelType(),
+            ]);
+        }
     }
 
     #[\Override]
@@ -49,17 +55,53 @@ final class MattermostApiNotifier implements MattermostNotifier
             $payload['root_id'] = $rootId;
         }
 
-        $this->requestWithChannelAccess($event, 'POST', '/api/v4/posts', $payload);
+        $response = $this->requestWithChannelAccess($event, 'POST', '/api/v4/posts', $payload);
+        if (null === $response || $response['status_code'] < 400) {
+            return;
+        }
+
+        if (isset($payload['root_id']) && $this->isInvalidRootIdResponse($response)) {
+            $rootId = $payload['root_id'];
+            unset($payload['root_id']);
+
+            $this->logger?->warning('Mattermost rejected a threaded post root; retrying as a channel post.', [
+                'channel_id' => $event->channelId(),
+                'channel_type' => $event->channelType(),
+                'root_id' => $rootId,
+                'status_code' => $response['status_code'],
+                'response_body' => $this->truncateResponseBody($response['body']),
+            ]);
+
+            $fallbackResponse = $this->requestWithChannelAccess($event, 'POST', '/api/v4/posts', $payload);
+            if (null === $fallbackResponse || $fallbackResponse['status_code'] < 400) {
+                return;
+            }
+
+            $this->logFailedRequest('POST', '/api/v4/posts', $fallbackResponse, [
+                'channel_id' => $event->channelId(),
+                'channel_type' => $event->channelType(),
+                'fallback_after_invalid_root_id' => true,
+            ]);
+
+            return;
+        }
+
+        $this->logFailedRequest('POST', '/api/v4/posts', $response, [
+            'channel_id' => $event->channelId(),
+            'channel_type' => $event->channelType(),
+        ]);
     }
 
     /**
      * @param array<string, string> $payload
+     *
+     * @return array{status_code: int, body: string}|null
      */
-    private function requestWithChannelAccess(MattermostInboundEvent $event, string $method, string $path, array $payload): void
+    private function requestWithChannelAccess(MattermostInboundEvent $event, string $method, string $path, array $payload): ?array
     {
         $response = $this->request($method, $path, $payload);
         if (null === $response || $response['status_code'] < 400) {
-            return;
+            return $response;
         }
 
         if (403 === $response['status_code'] && 'O' === $event->channelType()) {
@@ -73,22 +115,14 @@ final class MattermostApiNotifier implements MattermostNotifier
             if ($this->joinPublicChannel($event->channelId())) {
                 $retryResponse = $this->request($method, $path, $payload);
                 if (null === $retryResponse || $retryResponse['status_code'] < 400) {
-                    return;
+                    return $retryResponse;
                 }
 
-                $this->logFailedRequest($method, $path, $retryResponse, [
-                    'channel_id' => $event->channelId(),
-                    'retry_after_public_channel_join' => true,
-                ]);
-
-                return;
+                return $retryResponse;
             }
         }
 
-        $this->logFailedRequest($method, $path, $response, [
-            'channel_id' => $event->channelId(),
-            'channel_type' => $event->channelType(),
-        ]);
+        return $response;
     }
 
     private function joinPublicChannel(string $channelId): bool
@@ -220,6 +254,19 @@ final class MattermostApiNotifier implements MattermostNotifier
         }
 
         return substr($body, 0, 2000).'...';
+    }
+
+    /**
+     * @param array{status_code: int, body: string} $response
+     */
+    private function isInvalidRootIdResponse(array $response): bool
+    {
+        if (400 !== $response['status_code']) {
+            return false;
+        }
+
+        return str_contains($response['body'], 'api.post.create_post.root_id.app_error')
+            || str_contains($response['body'], 'Invalid RootId parameter');
     }
 
     private function replyRootId(MattermostInboundEvent $event): string
