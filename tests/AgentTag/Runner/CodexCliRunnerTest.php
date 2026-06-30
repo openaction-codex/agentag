@@ -78,6 +78,55 @@ final class CodexCliRunnerTest extends TestCase
         self::assertSame(8, $tokenUsage->outputTokens());
     }
 
+    public function testItFallsBackToTheLastAgentMessageWhenTheLastMessageFileIsMissing(): void
+    {
+        $factory = new TraceableProcessFactory();
+        $factory->writeLastMessage = false;
+        $factory->stdout = implode("\n", [
+            '{"type":"thread.started","thread_id":"thread-id"}',
+            '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I am checking that now."}}',
+            '{"type":"item.completed","item":{"id":"item_1","type":"command_execution","aggregated_output":"AGENTS.md\n","exit_code":0}}',
+            '{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Final answer from JSONL."}}',
+            '{"usage":{"input_tokens":12,"output_tokens":8}}',
+        ]);
+        $runner = new CodexCliRunner($factory);
+
+        $result = $runner->run(new AgentRunnerInput(
+            'Implement the task.',
+            $this->workingDirectory,
+            $this->artifactsDirectory,
+            [],
+            300,
+            'codex-full-access',
+        ));
+
+        self::assertTrue($result->successful());
+        self::assertSame('Final answer from JSONL.', $result->finalMessage());
+    }
+
+    public function testItDoesNotExposeJsonEventsWhenCodexProducesNoAgentMessage(): void
+    {
+        $factory = new TraceableProcessFactory();
+        $factory->writeLastMessage = false;
+        $factory->stdout = implode("\n", [
+            '{"type":"thread.started","thread_id":"thread-id"}',
+            '{"type":"turn.started"}',
+            '{"usage":{"input_tokens":12,"output_tokens":8}}',
+        ]);
+        $runner = new CodexCliRunner($factory);
+
+        $result = $runner->run(new AgentRunnerInput(
+            'Implement the task.',
+            $this->workingDirectory,
+            $this->artifactsDirectory,
+            [],
+            300,
+            'codex-full-access',
+        ));
+
+        self::assertSame('Run completed, but Codex did not provide a final message.', $result->finalMessage());
+    }
+
     public function testItStopsCodexWhenInterruptionIsRequested(): void
     {
         $factory = new TraceableProcessFactory();
@@ -120,6 +169,14 @@ final class TraceableProcessFactory implements ProcessFactory
 
     public ?FakeRunnerProcess $process = null;
 
+    public bool $writeLastMessage = true;
+
+    public string $lastMessage = 'Final answer from Codex.';
+
+    public string $stdout = '{"usage":{"input_tokens":12,"output_tokens":8}}';
+
+    public string $callbackOutput = "{\"type\":\"agent_message\",\"message\":\"Working on it.\"}\n";
+
     #[\Override]
     public function create(array $command, string $workingDirectory, array $environment, string $input, int $timeoutSeconds): RunnerProcess
     {
@@ -129,7 +186,13 @@ final class TraceableProcessFactory implements ProcessFactory
         $this->input = $input;
         $this->timeoutSeconds = $timeoutSeconds;
 
-        $this->process = new FakeRunnerProcess($command);
+        $this->process = new FakeRunnerProcess(
+            $command,
+            $this->writeLastMessage,
+            $this->lastMessage,
+            $this->stdout,
+            $this->callbackOutput,
+        );
 
         return $this->process;
     }
@@ -146,7 +209,13 @@ final class FakeRunnerProcess implements RunnerProcess
     /**
      * @param list<string> $command
      */
-    public function __construct(private array $command)
+    public function __construct(
+        private array $command,
+        private bool $writeLastMessage,
+        private string $lastMessage,
+        private string $stdout,
+        private string $callbackOutput,
+    )
     {
     }
 
@@ -165,11 +234,11 @@ final class FakeRunnerProcess implements RunnerProcess
         $this->running = true;
         $this->pollsRemaining = 1;
         $outputPathIndex = array_search('--output-last-message', $this->command, true);
-        if (is_int($outputPathIndex)) {
-            file_put_contents($this->command[$outputPathIndex + 1], 'Final answer from Codex.');
+        if ($this->writeLastMessage && is_int($outputPathIndex)) {
+            file_put_contents($this->command[$outputPathIndex + 1], $this->lastMessage);
         }
         if (null !== $callback) {
-            $callback('out', "{\"type\":\"agent_message\",\"message\":\"Working on it.\"}\n");
+            $callback('out', $this->callbackOutput);
         }
     }
 
@@ -217,7 +286,7 @@ final class FakeRunnerProcess implements RunnerProcess
     #[\Override]
     public function output(): string
     {
-        return '{"usage":{"input_tokens":12,"output_tokens":8}}';
+        return $this->stdout;
     }
 
     #[\Override]

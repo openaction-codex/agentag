@@ -13,13 +13,14 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 final class MattermostApiNotifierTest extends TestCase
 {
-    public function testItJoinsPublicChannelsAndRetriesForbiddenRequests(): void
+    public function testItJoinsPublicChannelsAndRetriesDeniedTypingIndicators(): void
     {
         $requests = [];
+        $logger = new TraceableLogger();
         $responses = [
-            new MockResponse('{"message":"forbidden"}', ['http_code' => 403]),
+            new MockResponse('{"id":"api.context.permissions.app_error","message":"You do not have the appropriate permissions."}', ['http_code' => 403]),
             new MockResponse('{"id":"bot-user-id"}'),
-            new MockResponse('{"channel_id":"channel-id","user_id":"bot-user-id"}', ['http_code' => 201]),
+            new MockResponse('{"channel_id":"channel-id","user_id":"bot-user-id","roles":"channel_user"}', ['http_code' => 201]),
             new MockResponse('{}'),
         ];
         $httpClient = new MockHttpClient(static function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
@@ -34,6 +35,7 @@ final class MattermostApiNotifierTest extends TestCase
         $notifier = new MattermostApiNotifier(
             $httpClient,
             new MattermostApiSettings('https://mattermost.example.test', 'bot-token', 20),
+            $logger,
         );
 
         $notifier->showTyping($this->publicChannelEvent());
@@ -48,7 +50,12 @@ final class MattermostApiNotifierTest extends TestCase
             $requests,
         ));
         self::assertSame(['channel_id' => 'channel-id', 'parent_id' => 'post-id'], $requests[0]['body']);
+        self::assertNull($requests[1]['body']);
         self::assertSame(['user_id' => 'bot-user-id'], $requests[2]['body']);
+        self::assertSame(['channel_id' => 'channel-id', 'parent_id' => 'post-id'], $requests[3]['body']);
+        self::assertSame(LogLevel::DEBUG, $logger->records[0]['level']);
+        self::assertSame('Mattermost bot joined public channel before sending typing indicator.', $logger->records[0]['message']);
+        self::assertSame('channel-id', $logger->records[0]['context']['channel_id']);
     }
 
     public function testItLogsMattermostResponseBodiesForFailedRequests(): void
@@ -76,7 +83,7 @@ final class MattermostApiNotifierTest extends TestCase
         $logger = new TraceableLogger();
         $responses = [
             new MockResponse('{"id":"api.post.create_post.root_id.app_error","message":"Invalid RootId parameter."}', ['http_code' => 400]),
-            new MockResponse('{"id":"post-id","root_id":"","channel_id":"channel-id"}'),
+            new MockResponse('{"id":"api.context.permissions.app_error","message":"You do not have the appropriate permissions."}', ['http_code' => 403]),
             new MockResponse('{"id":"fallback-post-id"}'),
         ];
         $httpClient = new MockHttpClient(static function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
@@ -107,8 +114,10 @@ final class MattermostApiNotifierTest extends TestCase
         self::assertSame(['channel_id' => 'channel-id', 'message' => 'Done', 'root_id' => 'post-id'], $requests[0]['body']);
         self::assertNull($requests[1]['body']);
         self::assertSame(['channel_id' => 'channel-id', 'message' => 'Done'], $requests[2]['body']);
-        self::assertSame('Mattermost rejected a threaded post root; retrying as a channel post.', $logger->records[0]['message']);
-        self::assertSame('post-id', $logger->records[0]['context']['root_id']);
+        self::assertSame('Mattermost API request failed.', $logger->records[0]['message']);
+        self::assertSame('resolve_thread_root', $logger->records[0]['context']['operation']);
+        self::assertSame('Mattermost rejected a threaded post root; retrying as a channel post.', $logger->records[1]['message']);
+        self::assertSame('post-id', $logger->records[1]['context']['root_id']);
     }
 
     public function testItResolvesTheThreadRootFromTheSourcePostWhenMattermostRejectsTheStoredRoot(): void

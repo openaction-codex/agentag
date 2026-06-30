@@ -68,6 +68,7 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
 
         $stdout = $process->output();
         $stderr = $process->errorOutput();
+        $exitCode = $process->exitCode();
         if ($interrupted) {
             return new AgentRunnerResult(
                 130,
@@ -79,16 +80,68 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
             );
         }
 
-        $finalMessage = is_file($lastMessagePath) ? trim((string) file_get_contents($lastMessagePath)) : trim($stdout);
+        $finalMessage = $this->finalMessage($lastMessagePath, $stdout, $exitCode, $parser);
 
         return new AgentRunnerResult(
-            $process->exitCode(),
+            $exitCode,
             $finalMessage,
             $stdout,
             $stderr,
             [new AgentArtifact($lastMessagePath, 'Codex final message')],
             $this->tokenUsageFromOutput($stdout),
         );
+    }
+
+    private function finalMessage(string $lastMessagePath, string $stdout, int $exitCode, CodexJsonEventParser $parser): string
+    {
+        if (is_file($lastMessagePath)) {
+            $message = trim((string) file_get_contents($lastMessagePath));
+            if ('' !== $message) {
+                return $message;
+            }
+        }
+
+        $message = $parser->lastAgentMessageFromOutput($stdout);
+        if (null !== $message) {
+            return $message;
+        }
+
+        $stdout = trim($stdout);
+        if ('' === $stdout) {
+            return 0 === $exitCode
+                ? 'Run completed, but Codex did not provide a final message.'
+                : 'Run failed before Codex produced a final message.';
+        }
+
+        if ($this->looksLikeJsonEventOutput($stdout)) {
+            return 0 === $exitCode
+                ? 'Run completed, but Codex did not provide a final message.'
+                : 'Run failed before Codex produced a final message.';
+        }
+
+        return $stdout;
+    }
+
+    private function looksLikeJsonEventOutput(string $stdout): bool
+    {
+        foreach (explode("\n", $stdout) as $line) {
+            $line = trim($line);
+            if ('' === $line) {
+                continue;
+            }
+
+            try {
+                $data = json_decode($line, true, flags: \JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                return false;
+            }
+
+            if (!is_array($data) || (!isset($data['type']) && !isset($data['item']) && !isset($data['usage']) && !isset($data['token_usage']))) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function tokenUsageFromOutput(string $stdout): ?TokenUsage

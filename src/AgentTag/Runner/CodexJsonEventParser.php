@@ -38,6 +38,34 @@ final class CodexJsonEventParser
         return null === $event ? [] : [$event];
     }
 
+    public function lastAgentMessageFromOutput(string $output): ?string
+    {
+        $lastMessage = null;
+        foreach (explode("\n", $output) as $line) {
+            $line = trim($line);
+            if ('' === $line) {
+                continue;
+            }
+
+            try {
+                $data = json_decode($line, true, flags: \JSON_THROW_ON_ERROR);
+            } catch (\JsonException) {
+                continue;
+            }
+
+            if (!is_array($data)) {
+                continue;
+            }
+
+            $message = $this->agentMessageFromData($data);
+            if (null !== $message) {
+                $lastMessage = $message;
+            }
+        }
+
+        return $lastMessage;
+    }
+
     private function progressFromLine(string $line): ?AgentRunnerProgress
     {
         $line = trim($line);
@@ -88,6 +116,27 @@ final class CodexJsonEventParser
         $delta = $data['delta'] ?? null;
         if (is_array($delta)) {
             return $this->messageFromData($delta);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<mixed, mixed> $data
+     */
+    private function agentMessageFromData(array $data): ?string
+    {
+        $type = $data['type'] ?? null;
+        if (is_string($type) && in_array($type, ['agent_message', 'assistant_message'], true)) {
+            return $this->messageFromData($data);
+        }
+
+        $item = $data['item'] ?? null;
+        if (is_array($item)) {
+            $itemType = $item['type'] ?? null;
+            if (is_string($itemType) && in_array($itemType, ['agent_message', 'assistant_message'], true)) {
+                return $this->messageFromData($item);
+            }
         }
 
         return null;

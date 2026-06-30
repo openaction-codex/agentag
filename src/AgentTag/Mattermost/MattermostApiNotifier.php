@@ -30,8 +30,29 @@ final class MattermostApiNotifier implements MattermostNotifier
             $payload['parent_id'] = $rootId;
         }
 
-        $response = $this->requestWithChannelAccess($event, 'POST', '/api/v4/users/me/typing', $payload);
+        $response = $this->request('POST', '/api/v4/users/me/typing', $payload);
         if (null !== $response && $response['status_code'] >= 400) {
+            if ('O' === $event->channelType() && $this->isPermissionDeniedResponse($response) && $this->joinPublicChannel($event->channelId())) {
+                $retryResponse = $this->request('POST', '/api/v4/users/me/typing', $payload);
+                if (null === $retryResponse || $retryResponse['status_code'] < 400) {
+                    return;
+                }
+
+                $response = $retryResponse;
+            }
+
+            if ($this->isPermissionDeniedResponse($response)) {
+                $this->logger?->debug('Mattermost typing indicator was denied.', [
+                    'method' => 'POST',
+                    'path' => '/api/v4/users/me/typing',
+                    'status_code' => $response['status_code'],
+                    'channel_id' => $event->channelId(),
+                    'channel_type' => $event->channelType(),
+                ]);
+
+                return;
+            }
+
             $this->logFailedRequest('POST', '/api/v4/users/me/typing', $response, [
                 'channel_id' => $event->channelId(),
                 'channel_type' => $event->channelType(),
@@ -55,7 +76,7 @@ final class MattermostApiNotifier implements MattermostNotifier
             $payload['root_id'] = $rootId;
         }
 
-        $response = $this->requestWithChannelAccess($event, 'POST', '/api/v4/posts', $payload);
+        $response = $this->request('POST', '/api/v4/posts', $payload);
         if (null === $response || $response['status_code'] < 400) {
             return;
         }
@@ -77,7 +98,7 @@ final class MattermostApiNotifier implements MattermostNotifier
                     'response_body' => $this->truncateResponseBody($response['body']),
                 ]);
 
-                $resolvedResponse = $this->requestWithChannelAccess($event, 'POST', '/api/v4/posts', $payload);
+                $resolvedResponse = $this->request('POST', '/api/v4/posts', $payload);
                 if (null === $resolvedResponse || $resolvedResponse['status_code'] < 400) {
                     return;
                 }
@@ -95,7 +116,7 @@ final class MattermostApiNotifier implements MattermostNotifier
                 'response_body' => $this->truncateResponseBody($response['body']),
             ]);
 
-            $fallbackResponse = $this->requestWithChannelAccess($event, 'POST', '/api/v4/posts', $payload);
+            $fallbackResponse = $this->request('POST', '/api/v4/posts', $payload);
             if (null === $fallbackResponse || $fallbackResponse['status_code'] < 400) {
                 return;
             }
@@ -115,64 +136,6 @@ final class MattermostApiNotifier implements MattermostNotifier
         ]);
     }
 
-    /**
-     * @param array<string, string> $payload
-     *
-     * @return array{status_code: int, body: string}|null
-     */
-    private function requestWithChannelAccess(MattermostInboundEvent $event, string $method, string $path, array $payload): ?array
-    {
-        $response = $this->request($method, $path, $payload);
-        if (null === $response || $response['status_code'] < 400) {
-            return $response;
-        }
-
-        if (403 === $response['status_code'] && 'O' === $event->channelType()) {
-            $this->logger?->info('Mattermost API request failed for a public channel; attempting to join before retrying.', [
-                'method' => $method,
-                'path' => $path,
-                'status_code' => $response['status_code'],
-                'channel_id' => $event->channelId(),
-            ]);
-
-            if ($this->joinPublicChannel($event->channelId())) {
-                $retryResponse = $this->request($method, $path, $payload);
-                if (null === $retryResponse || $retryResponse['status_code'] < 400) {
-                    return $retryResponse;
-                }
-
-                return $retryResponse;
-            }
-        }
-
-        return $response;
-    }
-
-    private function joinPublicChannel(string $channelId): bool
-    {
-        $botUserId = $this->botUserId();
-        if (null === $botUserId) {
-            return false;
-        }
-
-        $path = sprintf('/api/v4/channels/%s/members', rawurlencode($channelId));
-        $response = $this->request('POST', $path, ['user_id' => $botUserId]);
-        if (null !== $response && $response['status_code'] < 400) {
-            $this->logger?->info('Mattermost bot joined public channel before retrying request.', [
-                'channel_id' => $channelId,
-            ]);
-
-            return true;
-        }
-
-        $this->logFailedRequest('POST', $path, $response, [
-            'channel_id' => $channelId,
-            'operation' => 'join_public_channel',
-        ]);
-
-        return false;
-    }
-
     private function resolveThreadRootId(MattermostInboundEvent $event): ?string
     {
         if ('' === $event->postId()) {
@@ -180,7 +143,7 @@ final class MattermostApiNotifier implements MattermostNotifier
         }
 
         $path = sprintf('/api/v4/posts/%s', rawurlencode($event->postId()));
-        $response = $this->requestWithChannelAccess($event, 'GET', $path, []);
+        $response = $this->request('GET', $path);
         if (null === $response || $response['status_code'] >= 400) {
             $this->logFailedRequest('GET', $path, $response, [
                 'channel_id' => $event->channelId(),
@@ -230,6 +193,32 @@ final class MattermostApiNotifier implements MattermostNotifier
         return null;
     }
 
+    private function joinPublicChannel(string $channelId): bool
+    {
+        $botUserId = $this->botUserId();
+        if (null === $botUserId) {
+            return false;
+        }
+
+        $path = sprintf('/api/v4/channels/%s/members', rawurlencode($channelId));
+        $response = $this->request('POST', $path, ['user_id' => $botUserId]);
+        if (null !== $response && $response['status_code'] < 400) {
+            $this->logger?->debug('Mattermost bot joined public channel before sending typing indicator.', [
+                'channel_id' => $channelId,
+            ]);
+
+            return true;
+        }
+
+        $this->logger?->debug('Mattermost bot could not join public channel before sending typing indicator.', [
+            'channel_id' => $channelId,
+            'status_code' => $response['status_code'] ?? null,
+            'response_body' => null === $response ? null : $this->truncateResponseBody($response['body']),
+        ]);
+
+        return false;
+    }
+
     private function botUserId(): ?string
     {
         if (null !== $this->botUserId) {
@@ -238,8 +227,9 @@ final class MattermostApiNotifier implements MattermostNotifier
 
         $response = $this->request('GET', '/api/v4/users/me');
         if (null === $response || $response['status_code'] >= 400) {
-            $this->logFailedRequest('GET', '/api/v4/users/me', $response, [
-                'operation' => 'load_bot_user',
+            $this->logger?->debug('Mattermost bot user could not be loaded before sending typing indicator.', [
+                'status_code' => $response['status_code'] ?? null,
+                'response_body' => null === $response ? null : $this->truncateResponseBody($response['body']),
             ]);
 
             return null;
@@ -248,8 +238,7 @@ final class MattermostApiNotifier implements MattermostNotifier
         try {
             $payload = json_decode($response['body'], true, flags: JSON_THROW_ON_ERROR);
         } catch (\JsonException) {
-            $this->logger?->warning('Mattermost API returned an invalid bot user payload.', [
-                'path' => '/api/v4/users/me',
+            $this->logger?->debug('Mattermost API returned an invalid bot user payload before sending typing indicator.', [
                 'response_body' => $this->truncateResponseBody($response['body']),
             ]);
 
@@ -257,8 +246,7 @@ final class MattermostApiNotifier implements MattermostNotifier
         }
 
         if (!is_array($payload) || !is_string($payload['id'] ?? null) || '' === trim($payload['id'])) {
-            $this->logger?->warning('Mattermost API returned a bot user payload without an id.', [
-                'path' => '/api/v4/users/me',
+            $this->logger?->debug('Mattermost API returned a bot user payload without an id before sending typing indicator.', [
                 'response_body' => $this->truncateResponseBody($response['body']),
             ]);
 
@@ -347,6 +335,19 @@ final class MattermostApiNotifier implements MattermostNotifier
 
         return str_contains($response['body'], 'api.post.create_post.root_id.app_error')
             || str_contains($response['body'], 'Invalid RootId parameter');
+    }
+
+    /**
+     * @param array{status_code: int, body: string} $response
+     */
+    private function isPermissionDeniedResponse(array $response): bool
+    {
+        if (403 !== $response['status_code']) {
+            return false;
+        }
+
+        return str_contains($response['body'], 'api.context.permissions.app_error')
+            || str_contains($response['body'], 'You do not have the appropriate permissions');
     }
 
     private function replyRootId(MattermostInboundEvent $event): string
