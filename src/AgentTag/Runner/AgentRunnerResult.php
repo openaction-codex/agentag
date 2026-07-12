@@ -4,9 +4,7 @@ namespace App\AgentTag\Runner;
 
 final readonly class AgentRunnerResult
 {
-    /**
-     * @param list<AgentArtifact> $artifacts
-     */
+    /** @param list<AgentArtifact> $artifacts */
     public function __construct(
         private int $exitCode,
         private string $finalMessage,
@@ -14,6 +12,8 @@ final readonly class AgentRunnerResult
         private string $stderr,
         private array $artifacts,
         private ?TokenUsage $tokenUsage,
+        private ?string $sessionId = null,
+        private ?TaskContinuation $continuation = null,
     ) {
     }
 
@@ -42,9 +42,7 @@ final readonly class AgentRunnerResult
         return $this->stderr;
     }
 
-    /**
-     * @return list<AgentArtifact>
-     */
+    /** @return list<AgentArtifact> */
     public function artifacts(): array
     {
         return $this->artifacts;
@@ -53,5 +51,15 @@ final readonly class AgentRunnerResult
     public function tokenUsage(): ?TokenUsage
     {
         return $this->tokenUsage;
+    }
+
+    public function sessionId(): ?string
+    {
+        return $this->sessionId;
+    }
+
+    public function continuation(): ?TaskContinuation
+    {
+        return $this->continuation;
     }
 }

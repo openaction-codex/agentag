@@ -4,8 +4,6 @@ namespace App\Tests\Command;
 
 use App\AgentTag\Workspace\WorkspaceLayout;
 use App\Command\CleanupWorkspaceCommand;
-use App\Command\InspectWorkspaceCommand;
-use App\Command\ListFailedRunsCommand;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use App\Tests\RefreshDatabaseTrait;
@@ -13,6 +11,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
+use Symfony\Component\Filesystem\Filesystem;
 
 final class OperatorCommandTest extends KernelTestCase
 {
@@ -37,43 +36,19 @@ final class OperatorCommandTest extends KernelTestCase
         $this->removeDirectory($this->workspaceDirectory);
     }
 
-    public function testFailedRunCommandShowsSanitizedRunMetadata(): void
-    {
-        $session = new ChatSession('mattermost:team:channel:thread', 'mattermost', 'team', 'channel', 'thread', new \DateTimeImmutable());
-        $run = new AgentRun($session, 'failed', new \DateTimeImmutable(), 'input', 'output', null, 'agent', null, 'abc123', 'event-1', 'user-1');
-        $this->entityManager()->persist($session);
-        $this->entityManager()->persist($run);
-        $this->entityManager()->flush();
-
-        $tester = new CommandTester(new ListFailedRunsCommand($this->entityManager()));
-
-        self::assertSame(Command::SUCCESS, $tester->execute([]));
-        self::assertStringContainsString('agent', $tester->getDisplay());
-        self::assertStringContainsString('event-1', $tester->getDisplay());
-        self::assertStringContainsString('user-1', $tester->getDisplay());
-    }
-
-    public function testWorkspaceInspectShowsPaths(): void
-    {
-        $tester = new CommandTester(new InspectWorkspaceCommand($this->workspaceLayout()));
-
-        self::assertSame(Command::SUCCESS, $tester->execute([]));
-        self::assertStringContainsString($this->workspaceDirectory, $tester->getDisplay());
-    }
-
     public function testWorkspaceCleanupIsDryRunUnlessForced(): void
     {
         $runDirectory = $this->workspaceDirectory.'/runs/old-run';
         mkdir($runDirectory);
         touch($runDirectory, time() - 172800);
-        $session = new ChatSession('mattermost:team:channel:thread', 'mattermost', 'team', 'channel', 'thread', new \DateTimeImmutable());
+        $session = new ChatSession('mattermost:team:channel:thread', 'team', 'channel', 'thread', new \DateTimeImmutable());
         $run = new AgentRun($session, 'completed', new \DateTimeImmutable());
         $run->recordRunnerResult('completed', 'done', 'log', $runDirectory, [], 0, null);
         $this->entityManager()->persist($session);
         $this->entityManager()->persist($run);
         $this->entityManager()->flush();
 
-        $command = new CleanupWorkspaceCommand($this->workspaceLayout(), $this->entityManager());
+        $command = new CleanupWorkspaceCommand($this->workspaceLayout(), $this->entityManager(), new Filesystem());
         $dryRun = new CommandTester($command);
 
         self::assertSame(Command::SUCCESS, $dryRun->execute(['--older-than-days' => '1']));

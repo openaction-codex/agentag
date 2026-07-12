@@ -16,4 +16,6 @@ interface ChatSessionStore
         ?string $sourceEventId = null,
         ?string $requesterId = null,
     ): AgentRun;
+
+    public function save(AgentRun $run): void;
 }

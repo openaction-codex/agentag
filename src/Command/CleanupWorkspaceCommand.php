@@ -11,13 +11,15 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use Symfony\Component\Filesystem\Filesystem;
 
 #[AsCommand(name: 'agentag:workspace:cleanup', description: 'List or delete old isolated workspace directories without deleting run history.')]
 final class CleanupWorkspaceCommand extends Command
 {
     public function __construct(
         private readonly WorkspaceLayout $workspaceLayout,
-        private readonly ?EntityManagerInterface $entityManager = null,
+        private readonly EntityManagerInterface $entityManager,
+        private readonly Filesystem $filesystem,
     ) {
         parent::__construct();
     }
@@ -62,7 +64,7 @@ final class CleanupWorkspaceCommand extends Command
         }
 
         foreach ($candidates as $path) {
-            $this->removeDirectory($path);
+            $this->filesystem->remove($path);
             $this->markWorkspaceCleaned($path);
         }
         $io->success(sprintf('Deleted %d workspace director%s. Database run/session history was not deleted.', count($candidates), 1 === count($candidates) ? 'y' : 'ies'));
@@ -89,25 +91,8 @@ final class CleanupWorkspaceCommand extends Command
         return $paths;
     }
 
-    private function removeDirectory(string $path): void
-    {
-        foreach (array_reverse(glob($path.'/{,.}*', \GLOB_BRACE) ?: []) as $file) {
-            if ('.' === basename($file) || '..' === basename($file)) {
-                continue;
-            }
-
-            is_dir($file) && !is_link($file) ? $this->removeDirectory($file) : unlink($file);
-        }
-
-        rmdir($path);
-    }
-
     private function markWorkspaceCleaned(string $path): void
     {
-        if (null === $this->entityManager) {
-            return;
-        }
-
         $run = $this->entityManager->getRepository(AgentRun::class)->findOneBy(['workspacePath' => $path]);
         if (!$run instanceof AgentRun) {
             return;

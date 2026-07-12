@@ -8,21 +8,21 @@ use App\AgentTag\Runner\AgentRunnerProgressSink;
 use App\AgentTag\Runner\AgentRunnerResult;
 use App\Entity\AgentRun;
 use App\Entity\RunEvent;
+use Doctrine\ORM\EntityManagerInterface;
 
 final class MattermostRunProgressSink implements AgentRunnerProgressSink
 {
-    private ?string $lastPostedMessage = null;
-
-    private int $lastPostedAt = 0;
-
+    private int $lastUpdatedAt = 0;
     private int $lastTypingAt = 0;
 
     public function __construct(
         private readonly MattermostNotifier $notifier,
         private readonly MattermostInboundEvent $event,
         private readonly AgentRun $run,
+        private readonly TaskCardRenderer $renderer,
+        private readonly EntityManagerInterface $entityManager,
         private readonly ?RunEventRecorder $runEventRecorder = null,
-        private readonly int $minimumIntervalSeconds = 5,
+        private readonly int $minimumIntervalSeconds = 3,
         private readonly int $typingRefreshIntervalSeconds = 2,
     ) {
     }
@@ -30,79 +30,75 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
     #[\Override]
     public function onProgress(AgentRunnerProgress $progress): void
     {
-        $message = $this->formatMessage($progress->message());
-        if (!$this->shouldPost($message)) {
+        if ('agent_message' !== $progress->type()) {
+            return;
+        }
+        $stage = $this->stage($progress->message());
+        if ('' === $stage || $stage === $this->run->currentStage()) {
             return;
         }
 
-        $this->post($message, $progress->type());
+        $this->run->updateStage($stage);
+        $this->entityManager->flush();
+        $this->runEventRecorder?->record($this->run, RunEvent::TYPE_PROGRESS_UPDATE, $stage, [
+            'platform' => 'mattermost',
+            'progress_type' => $progress->type(),
+        ]);
+        if (0 === $this->lastUpdatedAt || time() - $this->lastUpdatedAt >= $this->minimumIntervalSeconds) {
+            $this->updateCard();
+        }
     }
 
     #[\Override]
     public function onHeartbeat(): void
     {
-        $this->refreshTyping(false);
-    }
-
-    public function finish(AgentRunnerResult $result): void
-    {
-        $message = $this->formatMessage($result->finalMessage());
-        if ('' === $message || $message === $this->lastPostedMessage) {
-            return;
-        }
-
-        $this->post($message, 'final_message');
-    }
-
-    private function shouldPost(string $message): bool
-    {
-        if ('' === $message || $message === $this->lastPostedMessage) {
-            return false;
-        }
-
-        return 0 === $this->lastPostedAt || time() - $this->lastPostedAt >= $this->minimumIntervalSeconds;
-    }
-
-    private function post(string $message, string $type): void
-    {
-        $this->refreshTyping(true);
-        $this->notifier->postProgress($this->event, $message);
-        $this->runEventRecorder?->record($this->run, RunEvent::TYPE_PROGRESS_UPDATE, $message, [
-            'platform' => 'mattermost',
-            'progress_type' => $type,
-            'channel_id' => $this->event->channelId(),
-            'thread_id' => '' === $this->event->rootId() ? $this->event->postId() : $this->event->rootId(),
-        ]);
-
-        $this->lastPostedMessage = $message;
-        $this->lastPostedAt = time();
-    }
-
-    private function refreshTyping(bool $force): void
-    {
         $now = time();
-        if (!$force && 0 !== $this->lastTypingAt && $now - $this->lastTypingAt < $this->typingRefreshIntervalSeconds) {
+        if (0 !== $this->lastTypingAt && $now - $this->lastTypingAt < $this->typingRefreshIntervalSeconds) {
             return;
         }
-
         $this->notifier->showTyping($this->event);
         $this->lastTypingAt = $now;
     }
 
-    private function formatMessage(string $message): string
+    public function finish(AgentRunnerResult $result): void
     {
-        $message = trim(str_replace(["\r\n", "\r"], "\n", $message));
-        $message = preg_replace("/\n{4,}/", "\n\n\n", $message) ?? $message;
+        $this->updateCard();
+    }
 
-        if (strlen($message) <= 4000) {
-            return $message;
+    public function milestone(string $message): void
+    {
+        if ('completion' !== $this->run->notificationPreference()) {
+            $this->notifier->postProgress($this->event, $message);
         }
+    }
 
-        $message = rtrim(substr($message, 0, 3997)).'...';
-        if (1 === substr_count($message, '```') % 2) {
-            $message .= "\n```";
+    public function controlMessage(string $message): void
+    {
+        $this->notifier->postProgress($this->event, $message);
+    }
+
+    private function updateCard(): void
+    {
+        $postId = $this->run->taskPostId();
+        if (null === $postId) {
+            $card = $this->renderer->render($this->run);
+            $postId = $this->notifier->createPost($this->event, $card->message, $card->props);
+            if (null !== $postId) {
+                $this->run->assignTaskPost($postId);
+                $this->entityManager->flush();
+            }
+        } else {
+            $card = $this->renderer->render($this->run);
+            $this->notifier->updatePost($postId, $card->message, $card->props);
         }
+        $this->lastUpdatedAt = time();
+    }
 
-        return $message;
+    private function stage(string $message): string
+    {
+        $message = trim(preg_replace('/\s+/', ' ', $message) ?? $message);
+        $sentence = preg_split('/(?<=[.!?])\s+/', $message, 2)[0] ?? $message;
+
+        return substr($sentence, 0, 240);
     }
 }

@@ -9,6 +9,7 @@ framework:
                 retry_strategy:
                     max_retries: 3
                     multiplier: 2
+            acknowledgements: 'doctrine://default?queue_name=acknowledgements'
             failed: 'doctrine://default?queue_name=failed'
             # sync: 'sync://'
 
@@ -19,6 +20,7 @@ framework:
 
         routing:
             App\Message\RunAgentRunMessage: async
+            App\Message\PrepareAgentTaskMessage: acknowledgements
 
             # Route your messages to the transports
             # 'App\Message\YourMessage': async

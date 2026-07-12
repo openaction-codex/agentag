@@ -26,10 +26,20 @@ services:
             $tag: '%env(string:AGENTAG_TAG)%'
             $workspacePath: '%env(resolve:AGENTAG_WORKSPACE_PATH)%'
             $runTimeoutSeconds: '%env(int:AGENTAG_RUN_TIMEOUT_SECONDS)%'
+            $acknowledgementModel: '%env(string:AGENTAG_ACK_MODEL)%'
+            $acknowledgementTimeoutSeconds: '%env(int:AGENTAG_ACK_TIMEOUT_SECONDS)%'
+            $taskDeadlineSeconds: '%env(int:AGENTAG_TASK_DEADLINE_SECONDS)%'
+            $maxRetries: '%env(int:AGENTAG_MAX_RETRIES)%'
+            $retryDelaySeconds: '%env(int:AGENTAG_RETRY_DELAY_SECONDS)%'
+            $notificationPreference: '%env(string:AGENTAG_NOTIFICATION_PREFERENCE)%'
 
     App\AgentTag\Security\SensitiveTextRedactor:
         arguments:
             $customPatterns: '%env(string:AGENTAG_REDACTION_PATTERNS)%'
+
+    App\AgentTag\Mattermost\TaskCardRenderer:
+        arguments:
+            $appSecret: '%env(string:APP_SECRET)%'
 
     App\AgentTag\Workspace\WorkspaceLayout:
         arguments:
@@ -42,8 +52,11 @@ services:
     App\AgentTag\Mattermost\MattermostNotifier:
         alias: App\AgentTag\Mattermost\MattermostApiNotifier
 
+    App\AgentTag\Mattermost\TaskPresentationGenerator:
+        alias: App\AgentTag\Mattermost\AcknowledgementGenerator
+
     App\AgentTag\Chat\InboundEventIdempotencyStore:
-        alias: App\AgentTag\Chat\InMemoryInboundEventIdempotencyStore
+        alias: App\AgentTag\Chat\DoctrineInboundEventIdempotencyStore
 
     App\AgentTag\Session\ChatSessionStore:
         alias: App\AgentTag\Session\DoctrineChatSessionStore

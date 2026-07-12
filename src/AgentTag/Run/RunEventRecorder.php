@@ -13,7 +13,7 @@ final readonly class RunEventRecorder
     public function __construct(
         private EntityManagerInterface $entityManager,
         private SensitiveTextRedactor $redactor,
-        private LoggerInterface $logger,
+        private ?LoggerInterface $logger = null,
     ) {
     }
 
@@ -32,7 +32,7 @@ final readonly class RunEventRecorder
         $this->entityManager->persist($event);
         $this->entityManager->flush();
 
-        $this->logger->info('Recorded agent run event.', [
+        $this->logger?->info('Recorded agent run event.', [
             'run_id' => $run->id(),
             'type' => $type,
         ] + $event->metadata());

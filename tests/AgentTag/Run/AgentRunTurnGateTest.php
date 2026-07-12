@@ -23,8 +23,8 @@ final class AgentRunTurnGateTest extends KernelTestCase
     public function testItAllowsARunWhenNoEarlierRunIsActiveInTheSameThread(): void
     {
         $entityManager = $this->entityManager();
-        $session = new ChatSession('mattermost:team:channel:thread', 'mattermost', 'team', 'channel', 'thread', new \DateTimeImmutable());
-        $otherSession = new ChatSession('mattermost:team:channel:other', 'mattermost', 'team', 'channel', 'other', new \DateTimeImmutable());
+        $session = new ChatSession('mattermost:team:channel:thread', 'team', 'channel', 'thread', new \DateTimeImmutable());
+        $otherSession = new ChatSession('mattermost:team:channel:other', 'team', 'channel', 'other', new \DateTimeImmutable());
         $otherActiveRun = new AgentRun($otherSession, AgentRun::STATUS_RUNNING, new \DateTimeImmutable());
         $run = new AgentRun($session, AgentRun::STATUS_ACCEPTED, new \DateTimeImmutable());
         $entityManager->persist($session);
@@ -41,7 +41,7 @@ final class AgentRunTurnGateTest extends KernelTestCase
     public function testItWaitsBehindEarlierActiveRunsInTheSameThread(): void
     {
         $entityManager = $this->entityManager();
-        $session = new ChatSession('mattermost:team:channel:thread', 'mattermost', 'team', 'channel', 'thread', new \DateTimeImmutable());
+        $session = new ChatSession('mattermost:team:channel:thread', 'team', 'channel', 'thread', new \DateTimeImmutable());
         $earlierActiveRun = new AgentRun($session, AgentRun::STATUS_RUNNING, new \DateTimeImmutable());
         $run = new AgentRun($session, AgentRun::STATUS_ACCEPTED, new \DateTimeImmutable());
         $entityManager->persist($session);

@@ -63,8 +63,15 @@ final class MattermostApiNotifier implements MattermostNotifier
     #[\Override]
     public function postProgress(MattermostInboundEvent $event, string $message): void
     {
+        $this->createPost($event, $message);
+    }
+
+    /** @param array<string, mixed> $props */
+    #[\Override]
+    public function createPost(MattermostInboundEvent $event, string $message, array $props = []): ?string
+    {
         if (!$this->settings->enabled() || '' === trim($message)) {
-            return;
+            return null;
         }
 
         $payload = [
@@ -75,10 +82,13 @@ final class MattermostApiNotifier implements MattermostNotifier
         if ('' !== $rootId) {
             $payload['root_id'] = $rootId;
         }
+        if ([] !== $props) {
+            $payload['props'] = $props;
+        }
 
         $response = $this->request('POST', '/api/v4/posts', $payload);
         if (null === $response || $response['status_code'] < 400) {
-            return;
+            return $this->postId($response);
         }
 
         if (isset($payload['root_id']) && $this->isInvalidRootIdResponse($response)) {
@@ -100,7 +110,7 @@ final class MattermostApiNotifier implements MattermostNotifier
 
                 $resolvedResponse = $this->request('POST', '/api/v4/posts', $payload);
                 if (null === $resolvedResponse || $resolvedResponse['status_code'] < 400) {
-                    return;
+                    return $this->postId($resolvedResponse);
                 }
 
                 $response = $resolvedResponse;
@@ -118,7 +128,7 @@ final class MattermostApiNotifier implements MattermostNotifier
 
             $fallbackResponse = $this->request('POST', '/api/v4/posts', $payload);
             if (null === $fallbackResponse || $fallbackResponse['status_code'] < 400) {
-                return;
+                return $this->postId($fallbackResponse);
             }
 
             $this->logFailedRequest('POST', '/api/v4/posts', $fallbackResponse, [
@@ -127,13 +137,51 @@ final class MattermostApiNotifier implements MattermostNotifier
                 'fallback_after_invalid_root_id' => true,
             ]);
 
-            return;
+            return null;
         }
 
         $this->logFailedRequest('POST', '/api/v4/posts', $response, [
             'channel_id' => $event->channelId(),
             'channel_type' => $event->channelType(),
         ]);
+
+        return null;
+    }
+
+    /** @param array<string, mixed> $props */
+    #[\Override]
+    public function updatePost(string $postId, string $message, array $props = []): bool
+    {
+        if (!$this->settings->enabled() || '' === trim($postId) || '' === trim($message)) {
+            return false;
+        }
+
+        $payload = ['message' => trim($message)];
+        if ([] !== $props) {
+            $payload['props'] = $props;
+        }
+        $path = sprintf('/api/v4/posts/%s/patch', rawurlencode($postId));
+        $response = $this->request('PUT', $path, $payload);
+        if (null !== $response && $response['status_code'] < 400) {
+            return true;
+        }
+
+        $this->logFailedRequest('PUT', $path, $response, ['post_id' => $postId]);
+
+        return false;
+    }
+
+    /** @param array{status_code: int, body: string}|null $response */
+    private function postId(?array $response): ?string
+    {
+        if (null === $response) {
+            return null;
+        }
+
+        $payload = json_decode($response['body'], true);
+        $postId = is_array($payload) ? ($payload['id'] ?? null) : null;
+
+        return is_string($postId) && '' !== trim($postId) ? trim($postId) : null;
     }
 
     private function resolveThreadRootId(MattermostInboundEvent $event): ?string
@@ -259,7 +307,7 @@ final class MattermostApiNotifier implements MattermostNotifier
     }
 
     /**
-     * @param array<string, string> $payload
+     * @param array<string, mixed> $payload
      *
      * @return array{status_code: int, body: string}|null
      */

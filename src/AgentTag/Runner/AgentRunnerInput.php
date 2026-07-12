@@ -16,6 +16,8 @@ final readonly class AgentRunnerInput
         private string $runnerMode,
         private ?AgentRunnerProgressSink $progressSink = null,
         private ?\Closure $interruptionChecker = null,
+        private ?string $resumeSessionId = null,
+        private ?\Closure $sessionStartedCallback = null,
     ) {
     }
 
@@ -60,5 +62,17 @@ final readonly class AgentRunnerInput
     public function interruptionRequested(): bool
     {
         return null !== $this->interruptionChecker && ($this->interruptionChecker)();
+    }
+
+    public function resumeSessionId(): ?string
+    {
+        return $this->resumeSessionId;
+    }
+
+    public function sessionStarted(string $sessionId): void
+    {
+        if (null !== $this->sessionStartedCallback) {
+            ($this->sessionStartedCallback)($sessionId);
+        }
     }
 }

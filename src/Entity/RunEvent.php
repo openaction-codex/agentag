@@ -13,7 +13,12 @@ class RunEvent
     public const TYPE_RUNNER_STARTED = 'runner_started';
     public const TYPE_RUNNER_FINISHED = 'runner_finished';
     public const TYPE_TOKEN_USAGE = 'token_usage';
-    public const TYPE_INTERRUPTION_REQUESTED = 'interruption_requested';
+    public const TYPE_CANCELLATION_REQUESTED = 'cancellation_requested';
+    public const TYPE_STEERING_RECEIVED = 'steering_received';
+    public const TYPE_RETRY_REQUESTED = 'retry_requested';
+    public const TYPE_TASK_WAITING = 'task_waiting';
+    public const TYPE_TASK_RESUMED = 'task_resumed';
+    public const TYPE_WORKSPACE_DISCARDED = 'workspace_discarded';
 
     #[ORM\Id]
     #[ORM\GeneratedValue]
@@ -69,44 +74,5 @@ class RunEvent
     public function createdAt(): \DateTimeImmutable
     {
         return $this->createdAt;
-    }
-
-    public function getId(): ?int
-    {
-        return $this->id();
-    }
-
-    public function getRun(): AgentRun
-    {
-        return $this->run();
-    }
-
-    public function getType(): string
-    {
-        return $this->type();
-    }
-
-    public function getMessage(): string
-    {
-        return $this->message();
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function getMetadata(): array
-    {
-        return $this->metadata();
-    }
-
-    public function getCreatedAt(): \DateTimeImmutable
-    {
-        return $this->createdAt();
-    }
-
-    #[\Override]
-    public function __toString(): string
-    {
-        return sprintf('Run event #%s (%s)', $this->id ?? 'new', $this->type);
     }
 }

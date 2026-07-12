@@ -16,18 +16,25 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         }
 
         $lastMessagePath = $input->artifactsDirectory().'/codex-last-message.txt';
-        $command = [
-            'codex',
-            'exec',
-            '--dangerously-bypass-approvals-and-sandbox',
-            '--skip-git-repo-check',
-            '--json',
-            '--cd',
-            $input->workingDirectory(),
-            '--output-last-message',
-            $lastMessagePath,
-            '-',
-        ];
+        $command = null === $input->resumeSessionId()
+            ? [
+                'codex', 'exec',
+                '--dangerously-bypass-approvals-and-sandbox',
+                '--skip-git-repo-check',
+                '--json',
+                '--cd', $input->workingDirectory(),
+                '--output-last-message', $lastMessagePath,
+                '-',
+            ]
+            : [
+                'codex', 'exec', 'resume',
+                '--dangerously-bypass-approvals-and-sandbox',
+                '--skip-git-repo-check',
+                '--json',
+                '--output-last-message', $lastMessagePath,
+                $input->resumeSessionId(),
+                '-',
+            ];
 
         $process = $this->processFactory->create(
             $command,
@@ -38,13 +45,18 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         );
         $parser = new CodexJsonEventParser();
         $interrupted = false;
-        $callback = function (string $type, string $buffer) use ($input, $parser): void {
+        $reportedSessionId = $input->resumeSessionId();
+        $callback = function (string $type, string $buffer) use ($input, $parser, &$reportedSessionId): void {
             if ('out' !== $type && !str_ends_with($type, 'OUT')) {
                 return;
             }
 
             foreach ($parser->consume($buffer) as $progress) {
                 $input->progressSink()?->onProgress($progress);
+            }
+            if (null !== $parser->threadId() && $parser->threadId() !== $reportedSessionId) {
+                $reportedSessionId = $parser->threadId();
+                $input->sessionStarted($reportedSessionId);
             }
         };
 
@@ -77,18 +89,22 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
                 $stderr,
                 [],
                 $this->tokenUsageFromOutput($stdout),
+                $parser->threadId() ?? $input->resumeSessionId(),
             );
         }
 
         $finalMessage = $this->finalMessage($lastMessagePath, $stdout, $exitCode, $parser);
+        $parsed = (new TaskContinuationParser())->parse($finalMessage);
 
         return new AgentRunnerResult(
             $exitCode,
-            $finalMessage,
+            $parsed['message'],
             $stdout,
             $stderr,
             [new AgentArtifact($lastMessagePath, 'Codex final message')],
             $this->tokenUsageFromOutput($stdout),
+            $parser->threadId() ?? $input->resumeSessionId(),
+            $parsed['continuation'],
         );
     }
 

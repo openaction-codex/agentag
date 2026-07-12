@@ -6,248 +6,174 @@ use App\AgentTag\Agent\AgentProfile;
 use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Chat\ChatSessionReference;
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
-use App\AgentTag\Chat\InMemoryInboundEventIdempotencyStore;
+use App\AgentTag\Chat\InboundEventIdempotencyStore;
 use App\AgentTag\Configuration\AgentTagSettings;
 use App\AgentTag\Mattermost\MattermostInboundEvent;
 use App\AgentTag\Mattermost\MattermostInteractionHandler;
 use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostSessionMapper;
 use App\AgentTag\Mattermost\MattermostThreadContextProvider;
+use App\AgentTag\Mattermost\TaskCardRenderer;
 use App\AgentTag\Run\RunInterrupter;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Session\ChatThreadContext;
 use App\AgentTag\Session\ChatThreadMessage;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
+use App\Message\PrepareAgentTaskMessage;
 use App\Message\RunAgentRunMessage;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Routing\Generator\UrlGenerator;
+use Symfony\Component\Routing\RequestContext;
+use Symfony\Component\Routing\Route;
+use Symfony\Component\Routing\RouteCollection;
 
 final class MattermostInteractionHandlerTest extends TestCase
 {
-    public function testItPostsProgressForMentionedMessagesAndIgnoresDuplicates(): void
+    public function testItCreatesOneModelWrittenTaskCardAndQueuesTheTask(): void
     {
         $notifier = new TraceableMattermostNotifier();
-        $sessionStore = new TraceableChatSessionStore();
-        $messageBus = new TraceableMessageBus();
-        $runInterrupter = new TraceableRunInterrupter();
-        $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
-            new MattermostSessionMapper(),
-            new InMemoryInboundEventIdempotencyStore(),
-            $notifier,
-            $sessionStore,
-            new FixedMattermostThreadContextProvider(),
-            new FixedAgentProfileProvider(),
-            $messageBus,
-            $runInterrupter,
-        );
-
-        $firstResult = $handler->handle($this->event());
-        $secondResult = $handler->handle($this->event());
-
-        self::assertTrue($firstResult->isHandled());
-        self::assertFalse($secondResult->isHandled());
-        self::assertSame(1, $notifier->typingCount);
-        self::assertSame([], $notifier->progressMessages);
-        self::assertSame([1], $messageBus->runIds);
-        self::assertSame(['mattermost:team:channel:post'], $sessionStore->sessionKeys);
-        self::assertSame(['agent'], $sessionStore->agentNames);
-        self::assertSame(['post'], $sessionStore->sourceEventIds);
-        self::assertSame(['user'], $sessionStore->requesterIds);
-        self::assertSame([['root text', '@Codex help']], $sessionStore->threadMessages);
-        self::assertSame(['mattermost:team:channel:post'], $runInterrupter->sessionKeys);
-    }
-
-    public function testItInterruptsTheActiveRunAndQueuesTheSteeringMessage(): void
-    {
-        $notifier = new TraceableMattermostNotifier();
-        $sessionStore = new TraceableChatSessionStore();
-        $messageBus = new TraceableMessageBus();
-        $runInterrupter = new TraceableRunInterrupter();
-        $runInterrupter->interruptCount = 1;
-        $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
-            new MattermostSessionMapper(),
-            new InMemoryInboundEventIdempotencyStore(),
-            $notifier,
-            $sessionStore,
-            new FixedMattermostThreadContextProvider(),
-            new FixedAgentProfileProvider(),
-            $messageBus,
-            $runInterrupter,
-        );
-
-        $result = $handler->handle($this->event(text: '@Codex use the API module instead'));
-
-        self::assertTrue($result->isHandled());
-        self::assertSame([1], $messageBus->runIds);
-        self::assertSame(['mattermost:team:channel:post'], $sessionStore->sessionKeys);
-        self::assertSame(['post'], $runInterrupter->sourceEventIds);
-    }
-
-    public function testItInterruptsTheActiveRunWithoutQueueingAReplacementForStopCommands(): void
-    {
-        $notifier = new TraceableMattermostNotifier();
-        $sessionStore = new TraceableChatSessionStore();
-        $messageBus = new TraceableMessageBus();
-        $runInterrupter = new TraceableRunInterrupter();
-        $runInterrupter->interruptCount = 1;
-        $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
-            new MattermostSessionMapper(),
-            new InMemoryInboundEventIdempotencyStore(),
-            $notifier,
-            $sessionStore,
-            new FixedMattermostThreadContextProvider(),
-            new FixedAgentProfileProvider(),
-            $messageBus,
-            $runInterrupter,
-        );
-
-        $result = $handler->handle($this->event(text: '@Codex stop'));
-
-        self::assertTrue($result->isHandled());
-        self::assertSame([], $messageBus->runIds);
-        self::assertSame([], $sessionStore->sessionKeys);
-        self::assertSame(['Interruption requested for the active run.'], $notifier->progressMessages);
-    }
-
-    public function testItReturnsConfigurationErrorsInChat(): void
-    {
-        $notifier = new TraceableMattermostNotifier();
-        $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
-            new MattermostSessionMapper(),
-            new InMemoryInboundEventIdempotencyStore(),
-            $notifier,
-            new FailingChatSessionStore('Workspace template directory "/tmp/workspace" does not exist.'),
-            new FixedMattermostThreadContextProvider(),
-            new FixedAgentProfileProvider(),
-            new TraceableMessageBus(),
-            new TraceableRunInterrupter(),
-        );
+        $store = new TraceableChatSessionStore();
+        $bus = new TraceableMessageBus();
+        $handler = $this->handler($notifier, $store, $bus, new TraceableRunInterrupter());
 
         $result = $handler->handle($this->event());
 
         self::assertTrue($result->isHandled());
-        self::assertSame(['Workspace template directory "/tmp/workspace" does not exist.'], $notifier->progressMessages);
+        self::assertSame([1], $bus->preparationRunIds);
+        self::assertSame([], $bus->runIds);
+        self::assertSame([], $notifier->createdPosts);
+        self::assertNull($store->savedRuns[0]->taskPostId());
+        self::assertSame(['mattermost:team:channel:post'], $store->sessionKeys);
     }
 
-    public function testItIgnoresMessagesWithoutTheConfiguredMention(): void
+    public function testItTreatsANewerMessageAsSteeringForTheSameActiveTask(): void
     {
-        $notifier = new TraceableMattermostNotifier();
-        $sessionStore = new TraceableChatSessionStore();
-        $handler = new MattermostInteractionHandler(
-            new ConfiguredTagMentionDetector(new AgentTagSettings('@Codex', '/tmp/workspace')),
+        $interrupter = new TraceableRunInterrupter();
+        $interrupter->activeRun = $this->taskRun(7, AgentRun::STATUS_INTERRUPT_REQUESTED);
+        $store = new TraceableChatSessionStore();
+        $bus = new TraceableMessageBus();
+        $handler = $this->handler(new TraceableMattermostNotifier(), $store, $bus, $interrupter);
+
+        $handler->handle($this->event('@Codex focus on the backend'));
+
+        self::assertSame(['focus on the backend'], $interrupter->steering);
+        self::assertSame([], $store->sessionKeys);
+        self::assertSame([], $bus->runIds);
+    }
+
+    public function testStopCancelsTheActiveTaskWithoutCreatingAnotherRun(): void
+    {
+        $interrupter = new TraceableRunInterrupter();
+        $interrupter->activeRun = $this->taskRun(7, AgentRun::STATUS_INTERRUPT_REQUESTED);
+        $store = new TraceableChatSessionStore();
+        $handler = $this->handler(new TraceableMattermostNotifier(), $store, new TraceableMessageBus(), $interrupter);
+
+        $handler->handle($this->event('@Codex stop'));
+
+        self::assertSame(1, $interrupter->cancelCalls);
+        self::assertSame([], $store->sessionKeys);
+    }
+
+    public function testRetryResumesTheLatestTaskInsteadOfCreatingANewOne(): void
+    {
+        $interrupter = new TraceableRunInterrupter();
+        $interrupter->retryRun = $this->taskRun(8, AgentRun::STATUS_ACCEPTED);
+        $store = new TraceableChatSessionStore();
+        $bus = new TraceableMessageBus();
+        $handler = $this->handler(new TraceableMattermostNotifier(), $store, $bus, $interrupter);
+
+        $handler->handle($this->event('@Codex retry from the test step'));
+
+        self::assertSame([8], $bus->runIds);
+        self::assertSame([], $store->sessionKeys);
+    }
+
+    private function handler(
+        TraceableMattermostNotifier $notifier,
+        TraceableChatSessionStore $store,
+        TraceableMessageBus $bus,
+        TraceableRunInterrupter $interrupter,
+    ): MattermostInteractionHandler {
+        $settings = new AgentTagSettings('@Codex', '/tmp/workspace');
+
+        return new MattermostInteractionHandler(
+            new ConfiguredTagMentionDetector($settings),
             new MattermostSessionMapper(),
-            new InMemoryInboundEventIdempotencyStore(),
+            new TestInboundEventIdempotencyStore(),
             $notifier,
-            $sessionStore,
+            $store,
             new FixedMattermostThreadContextProvider(),
             new FixedAgentProfileProvider(),
-            new TraceableMessageBus(),
-            new TraceableRunInterrupter(),
+            $bus,
+            $interrupter,
+            $this->renderer(),
+            $settings,
         );
-
-        $result = $handler->handle($this->event(text: 'hello'));
-
-        self::assertFalse($result->isHandled());
-        self::assertSame(0, $notifier->typingCount);
-        self::assertSame([], $notifier->progressMessages);
-        self::assertSame([], $sessionStore->sessionKeys);
     }
 
-    private function event(string $text = '@Codex help'): MattermostInboundEvent
+    private function renderer(): TaskCardRenderer
     {
-        return new MattermostInboundEvent(
-            'post',
-            $text,
-            'post',
-            '',
-            'channel',
-            'O',
-            'team',
-            'user',
-            '',
-        );
+        $routes = new RouteCollection();
+        $routes->add('agentag_mattermost_action', new Route('/integrations/mattermost/action'));
+
+        return new TaskCardRenderer(new UrlGenerator($routes, new RequestContext('', 'GET', 'agentag.test', 'https')), 'secret');
     }
-}
 
-final class TraceableChatSessionStore implements ChatSessionStore
-{
-    /**
-     * @var list<string>
-     */
-    public array $sessionKeys = [];
+    private function event(string $text = '@Codex fix billing tests'): MattermostInboundEvent
+    {
+        return new MattermostInboundEvent('post', $text, 'post', '', 'channel', 'O', 'team', 'user', '', 'thomas');
+    }
 
-    /**
-     * @var list<string>
-     */
-    public array $agentNames = [];
-
-    /**
-     * @var list<string|null>
-     */
-    public array $sourceEventIds = [];
-
-    /**
-     * @var list<string|null>
-     */
-    public array $requesterIds = [];
-
-    /**
-     * @var list<list<string>>
-     */
-    public array $threadMessages = [];
-
-    #[\Override]
-    public function recordRun(
-        ChatSessionReference $reference,
-        string $inputSummary,
-        ChatThreadContext $threadContext,
-        AgentProfile $agent,
-        ?string $sourceEventId = null,
-        ?string $requesterId = null,
-    ): AgentRun {
-        $this->sessionKeys[] = $reference->key();
-        $this->agentNames[] = $agent->name();
-        $this->sourceEventIds[] = $sourceEventId;
-        $this->requesterIds[] = $requesterId;
-        $this->threadMessages[] = array_map(
-            static fn (ChatThreadMessage $message): string => $message->text(),
-            $threadContext->messages(),
-        );
-
-        $run = new AgentRun(
-            new ChatSession($reference->key(), $reference->platform(), $reference->teamId(), $reference->channelId(), $reference->threadId(), new \DateTimeImmutable()),
-            'accepted',
-            new \DateTimeImmutable(),
-        );
-        $reflection = new \ReflectionProperty(AgentRun::class, 'id');
-        $reflection->setValue($run, count($this->sessionKeys));
+    private function taskRun(int $id, string $status): AgentRun
+    {
+        $run = new AgentRun(new ChatSession('mattermost:team:channel:post', 'team', 'channel', 'post', new \DateTimeImmutable()), $status, new \DateTimeImmutable());
+        (new \ReflectionProperty(AgentRun::class, 'id'))->setValue($run, $id);
 
         return $run;
     }
 }
 
-final readonly class FailingChatSessionStore implements ChatSessionStore
+final class TraceableChatSessionStore implements ChatSessionStore
 {
-    public function __construct(private string $message)
+    /** @var list<string> */
+    public array $sessionKeys = [];
+    /** @var list<AgentRun> */
+    public array $savedRuns = [];
+
+    #[\Override]
+    public function recordRun(ChatSessionReference $reference, string $inputSummary, ChatThreadContext $threadContext, AgentProfile $agent, ?string $sourceEventId = null, ?string $requesterId = null): AgentRun
     {
+        $this->sessionKeys[] = $reference->key();
+        $run = new AgentRun(new ChatSession($reference->key(), $reference->teamId(), $reference->channelId(), $reference->threadId(), new \DateTimeImmutable(), workspacePath: '/tmp/workspace'), AgentRun::STATUS_ACCEPTED, new \DateTimeImmutable(), workspacePath: '/tmp/workspace');
+        (new \ReflectionProperty(AgentRun::class, 'id'))->setValue($run, count($this->sessionKeys));
+
+        return $run;
     }
 
     #[\Override]
-    public function recordRun(
-        ChatSessionReference $reference,
-        string $inputSummary,
-        ChatThreadContext $threadContext,
-        AgentProfile $agent,
-        ?string $sourceEventId = null,
-        ?string $requesterId = null,
-    ): AgentRun {
-        throw new \InvalidArgumentException($this->message);
+    public function save(AgentRun $run): void
+    {
+        $this->savedRuns[] = $run;
+    }
+}
+
+final class TestInboundEventIdempotencyStore implements InboundEventIdempotencyStore
+{
+    /** @var array<string, true> */
+    private array $events = [];
+
+    #[\Override]
+    public function remember(string $eventId): bool
+    {
+        if (isset($this->events[$eventId])) {
+            return false;
+        }
+        $this->events[$eventId] = true;
+
+        return true;
     }
 }
 
@@ -265,71 +191,90 @@ final readonly class FixedMattermostThreadContextProvider implements MattermostT
     #[\Override]
     public function contextFor(MattermostInboundEvent $event): ChatThreadContext
     {
-        return new ChatThreadContext([
-            new ChatThreadMessage('root', 'user-a', 'root text'),
-            new ChatThreadMessage($event->postId(), $event->userId(), $event->text()),
-        ]);
+        return new ChatThreadContext([new ChatThreadMessage($event->postId(), $event->userId(), $event->text())]);
     }
 }
 
 final class TraceableMattermostNotifier implements MattermostNotifier
 {
-    public int $typingCount = 0;
-
-    /**
-     * @var list<string>
-     */
-    public array $progressMessages = [];
+    /** @var list<string> */
+    public array $createdPosts = [];
+    /** @var list<string> */
+    public array $updatedPosts = [];
 
     #[\Override]
     public function showTyping(MattermostInboundEvent $event): void
     {
-        ++$this->typingCount;
     }
 
     #[\Override]
     public function postProgress(MattermostInboundEvent $event, string $message): void
     {
-        $this->progressMessages[] = $message;
+    }
+
+    #[\Override]
+    public function createPost(MattermostInboundEvent $event, string $message, array $props = []): string
+    {
+        $this->createdPosts[] = $message;
+
+        return 'task-post-'.count($this->createdPosts);
+    }
+
+    #[\Override]
+    public function updatePost(string $postId, string $message, array $props = []): bool
+    {
+        $this->updatedPosts[] = $message;
+
+        return true;
     }
 }
 
 final class TraceableRunInterrupter implements RunInterrupter
 {
-    public int $interruptCount = 0;
-
-    /**
-     * @var list<string>
-     */
-    public array $sessionKeys = [];
-
-    /**
-     * @var list<string>
-     */
-    public array $sourceEventIds = [];
+    public ?AgentRun $activeRun = null;
+    public ?AgentRun $retryRun = null;
+    public int $cancelCalls = 0;
+    /** @var list<string> */
+    public array $steering = [];
 
     #[\Override]
-    public function interruptActiveRuns(ChatSessionReference $reference, string $sourceEventId, string $requesterId): int
+    public function cancelActiveRun(ChatSessionReference $reference, string $sourceEventId, string $requesterId): ?AgentRun
     {
-        $this->sessionKeys[] = $reference->key();
-        $this->sourceEventIds[] = $sourceEventId;
+        ++$this->cancelCalls;
 
-        return $this->interruptCount;
+        return $this->activeRun;
+    }
+
+    #[\Override]
+    public function steerActiveRun(ChatSessionReference $reference, string $instruction, string $sourceEventId, string $requesterId): ?AgentRun
+    {
+        $this->steering[] = $instruction;
+
+        return $this->activeRun;
+    }
+
+    #[\Override]
+    public function retryLatestRun(ChatSessionReference $reference, string $instruction): ?AgentRun
+    {
+        return $this->retryRun;
     }
 }
 
 final class TraceableMessageBus implements MessageBusInterface
 {
-    /**
-     * @var list<int>
-     */
+    /** @var list<int> */
     public array $runIds = [];
+    /** @var list<int> */
+    public array $preparationRunIds = [];
 
     #[\Override]
     public function dispatch(object $message, array $stamps = []): Envelope
     {
         if ($message instanceof RunAgentRunMessage) {
             $this->runIds[] = $message->runId();
+        }
+        if ($message instanceof PrepareAgentTaskMessage) {
+            $this->preparationRunIds[] = $message->runId();
         }
 
         return new Envelope($message, $stamps);

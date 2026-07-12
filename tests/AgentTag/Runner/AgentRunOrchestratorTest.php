@@ -44,7 +44,7 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         $entityManager = static::getContainer()->get(EntityManagerInterface::class);
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
-        $session = new ChatSession('mattermost:team:channel:root', 'mattermost', 'team', 'channel', 'root', new \DateTimeImmutable());
+        $session = new ChatSession('mattermost:team:channel:root', 'team', 'channel', 'root', new \DateTimeImmutable());
         $sessionWorkspace = $this->workspaceDirectory.'/runs/session-root';
         $run = new AgentRun($session, 'accepted', new \DateTimeImmutable(), 'input', workspacePath: $sessionWorkspace);
         $entityManager->persist($session);

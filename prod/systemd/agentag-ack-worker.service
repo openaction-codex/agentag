@@ -1,0 +1,27 @@
+[Unit]
+Description=AgentTag high-priority acknowledgement worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/agentag/app
+Environment=APP_ENV=prod
+Environment=APP_DEBUG=0
+Environment=HOME=/root
+Environment=USER=root
+Environment=LOGNAME=root
+Environment=SHELL=/bin/bash
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=CODEX_HOME=/root/.codex
+SyslogIdentifier=agentag-ack-worker
+ExecStart=/usr/bin/php8.4 /srv/agentag/app/bin/console messenger:consume acknowledgements --time-limit=3600 --memory-limit=256M
+Restart=always
+RestartSec=2
+User=root
+Group=root
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

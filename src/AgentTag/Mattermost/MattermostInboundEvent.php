@@ -14,6 +14,7 @@ final readonly class MattermostInboundEvent
         private string $teamId,
         private string $userId,
         private string $token,
+        private string $userName = '',
     ) {
     }
 
@@ -60,5 +61,10 @@ final readonly class MattermostInboundEvent
     public function token(): string
     {
         return $this->token;
+    }
+
+    public function userName(): string
+    {
+        return $this->userName;
     }
 }

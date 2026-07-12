@@ -41,7 +41,6 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         if (!$session instanceof ChatSession) {
             $session = new ChatSession(
                 $reference->key(),
-                $reference->platform(),
                 $reference->teamId(),
                 $reference->channelId(),
                 $reference->threadId(),
@@ -50,7 +49,6 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
             $this->entityManager->persist($session);
             $this->logger->info('Created chat session.', [
                 'session_key' => $reference->key(),
-                'platform' => $reference->platform(),
                 'team_id' => $reference->teamId(),
                 'channel_id' => $reference->channelId(),
                 'thread_id' => $reference->threadId(),
@@ -101,5 +99,12 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         ]);
 
         return $run;
+    }
+
+    #[\Override]
+    public function save(AgentRun $run): void
+    {
+        $this->entityManager->persist($run);
+        $this->entityManager->flush();
     }
 }

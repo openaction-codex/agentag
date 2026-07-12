@@ -147,6 +147,57 @@ final class CodexCliRunnerTest extends TestCase
         self::assertNotNull($factory->process);
         self::assertTrue($factory->process->stopped);
     }
+
+    public function testItPersistsTheCodexThreadAndResumesTheSameSession(): void
+    {
+        $factory = new TraceableProcessFactory();
+        $factory->callbackOutput = "{\"type\":\"thread.started\",\"thread_id\":\"019abc-session\"}\n";
+        $started = [];
+        $runner = new CodexCliRunner($factory);
+
+        $result = $runner->run(new AgentRunnerInput(
+            'Continue the task.',
+            $this->workingDirectory,
+            $this->artifactsDirectory,
+            [],
+            300,
+            'codex-full-access',
+            resumeSessionId: 'prior-session',
+            sessionStartedCallback: static function (string $sessionId) use (&$started): void { $started[] = $sessionId; },
+        ));
+
+        self::assertSame([
+            'codex', 'exec', 'resume',
+            '--dangerously-bypass-approvals-and-sandbox',
+            '--skip-git-repo-check',
+            '--json',
+            '--output-last-message', $this->artifactsDirectory.'/codex-last-message.txt',
+            'prior-session',
+            '-',
+        ], $factory->command);
+        self::assertSame(['019abc-session'], $started);
+        self::assertSame('019abc-session', $result->sessionId());
+    }
+
+    public function testItExtractsAWaitDirectiveWithoutShowingItToMattermost(): void
+    {
+        $factory = new TraceableProcessFactory();
+        $factory->lastMessage = "PR #184 is open and CI is running.\n\n<!-- agentag:{\"action\":\"wait\",\"seconds\":300,\"reason\":\"Waiting for CI\"} -->";
+
+        $result = (new CodexCliRunner($factory))->run(new AgentRunnerInput(
+            'Fix this and watch CI.',
+            $this->workingDirectory,
+            $this->artifactsDirectory,
+            [],
+            300,
+            'codex-full-access',
+        ));
+
+        self::assertSame('PR #184 is open and CI is running.', $result->finalMessage());
+        self::assertNotNull($result->continuation());
+        self::assertSame(300, $result->continuation()->delaySeconds());
+        self::assertSame('Waiting for CI', $result->continuation()->reason());
+    }
 }
 
 final class TraceableProcessFactory implements ProcessFactory

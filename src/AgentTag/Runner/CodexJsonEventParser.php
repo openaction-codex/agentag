@@ -6,6 +6,8 @@ final class CodexJsonEventParser
 {
     private string $buffer = '';
 
+    private ?string $threadId = null;
+
     /**
      * @return list<AgentRunnerProgress>
      */
@@ -66,6 +68,11 @@ final class CodexJsonEventParser
         return $lastMessage;
     }
 
+    public function threadId(): ?string
+    {
+        return $this->threadId;
+    }
+
     private function progressFromLine(string $line): ?AgentRunnerProgress
     {
         $line = trim($line);
@@ -83,14 +90,31 @@ final class CodexJsonEventParser
             return null;
         }
 
+        if ('thread.started' === ($data['type'] ?? null) && is_string($data['thread_id'] ?? null)) {
+            $this->threadId = $data['thread_id'];
+
+            return null;
+        }
+
+        $item = $data['item'] ?? null;
+        if (is_array($item)) {
+            $itemType = $item['type'] ?? null;
+            if (!is_string($itemType) || !in_array($itemType, ['agent_message', 'assistant_message'], true)) {
+                return null;
+            }
+        } else {
+            $eventType = $data['type'] ?? null;
+            if (!is_string($eventType) || !in_array($eventType, ['agent_message', 'assistant_message'], true)) {
+                return null;
+            }
+        }
+
         $message = $this->messageFromData($data);
         if (null === $message) {
             return null;
         }
 
-        $type = $data['type'] ?? 'progress';
-
-        return new AgentRunnerProgress(is_scalar($type) ? (string) $type : 'progress', $message);
+        return new AgentRunnerProgress('agent_message', $message);
     }
 
     /**

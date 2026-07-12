@@ -62,7 +62,7 @@ final readonly class AgentRunOrchestrator
 
         $run->markRunning();
         $this->entityManager->flush();
-        $this->runEventRecorder?->record($run, RunEvent::TYPE_RUNNER_STARTED, 'Started agent runner.', [
+        $this->runEventRecorder?->record($run, null === $run->codexThreadId() ? RunEvent::TYPE_RUNNER_STARTED : RunEvent::TYPE_TASK_RESUMED, null === $run->codexThreadId() ? 'Started agent runner.' : 'Resumed Codex task session.', [
             'runner_mode' => $runnerMode,
             'timeout_seconds' => $timeoutSeconds,
         ]);
@@ -82,10 +82,25 @@ final readonly class AgentRunOrchestrator
             $runnerMode,
             $progressSink,
             fn (): bool => $this->interruptionRequested($run),
+            $run->codexThreadId(),
+            function (string $sessionId) use ($run): void {
+                $run->recordCodexThread($sessionId);
+                $this->entityManager->flush();
+            },
         ));
 
-        $status = $run->interruptionRequested() ? AgentRun::STATUS_INTERRUPTED : ($result->successful() ? AgentRun::STATUS_COMPLETED : AgentRun::STATUS_FAILED);
-        $summary = AgentRun::STATUS_INTERRUPTED === $status ? 'Run interrupted by a newer message in this thread.' : $result->finalMessage();
+        if (null !== $result->sessionId()) {
+            $run->recordCodexThread($result->sessionId());
+        }
+
+        $status = $this->resultStatus($run, $result);
+        $summary = match ($status) {
+            AgentRun::STATUS_INTERRUPTED => 'Task stopped by request. The workspace is preserved for 24 hours.',
+            AgentRun::STATUS_ACCEPTED => $run->interruptionRequested()
+                ? 'Applying new steering to the same task.'
+                : 'The stage failed and will be retried automatically.',
+            default => $result->finalMessage(),
+        };
         $run->recordRunnerResult(
             $status,
             $this->redactor->redact($summary),
@@ -95,6 +110,20 @@ final readonly class AgentRunOrchestrator
             $result->exitCode(),
             $result->tokenUsage(),
         );
+        if (AgentRun::STATUS_INTERRUPTED === $status) {
+            $run->markInterrupted($summary, $workingDirectory);
+        } elseif (null !== $result->continuation()) {
+            $run->waitUntil(
+                new \DateTimeImmutable('+'.$result->continuation()->delaySeconds().' seconds'),
+                $result->continuation()->reason(),
+            );
+            $this->runEventRecorder?->record($run, RunEvent::TYPE_TASK_WAITING, $result->continuation()->reason(), [
+                'wake_at' => $run->wakeAt()?->format(\DateTimeInterface::ATOM),
+                'delay_seconds' => $result->continuation()->delaySeconds(),
+            ]);
+        } elseif (AgentRun::STATUS_ACCEPTED === $status) {
+            $run->updateStage($summary);
+        }
         $this->entityManager->flush();
 
         $this->runEventRecorder?->record($run, RunEvent::TYPE_RUNNER_FINISHED, $result->successful() ? 'Agent runner completed.' : 'Agent runner failed.', [
@@ -135,5 +164,22 @@ final readonly class AgentRunOrchestrator
         $this->entityManager->refresh($run);
 
         return $run->interruptionRequested();
+    }
+
+    private function resultStatus(AgentRun $run, AgentRunnerResult $result): string
+    {
+        if ($run->interruptionRequested()) {
+            return AgentRun::INTERRUPT_STEER === $run->interruptionKind()
+                ? AgentRun::STATUS_ACCEPTED
+                : AgentRun::STATUS_INTERRUPTED;
+        }
+        if (null !== $result->continuation() && $result->successful()) {
+            return AgentRun::STATUS_WAITING;
+        }
+        if ($result->successful()) {
+            return AgentRun::STATUS_COMPLETED;
+        }
+
+        return $run->canRetry() ? AgentRun::STATUS_ACCEPTED : AgentRun::STATUS_FAILED;
     }
 }

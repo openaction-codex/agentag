@@ -8,11 +8,23 @@ final readonly class AgentTagSettings
         private string $tag,
         private string $workspacePath,
         private int $runTimeoutSeconds = 1200,
+        private string $acknowledgementModel = 'gpt-5.6-luna',
+        private int $acknowledgementTimeoutSeconds = 20,
+        private int $taskDeadlineSeconds = 86400,
+        private int $maxRetries = 2,
+        private int $retryDelaySeconds = 60,
+        private string $notificationPreference = 'milestones',
     ) {
         $this->assertValidTag($tag);
         $this->assertAbsolutePath($workspacePath, 'workspace path');
         if ($runTimeoutSeconds < 1) {
             throw new \InvalidArgumentException('AgentTag run timeout must be a positive integer.');
+        }
+        if ($acknowledgementTimeoutSeconds < 1 || $taskDeadlineSeconds < 1 || $maxRetries < 0 || $retryDelaySeconds < 1) {
+            throw new \InvalidArgumentException('AgentTag task timing and retry settings are invalid.');
+        }
+        if (!in_array($notificationPreference, ['all', 'milestones', 'completion'], true)) {
+            throw new \InvalidArgumentException('AgentTag notification preference must be all, milestones, or completion.');
         }
     }
 
@@ -29,6 +41,36 @@ final readonly class AgentTagSettings
     public function runTimeoutSeconds(): int
     {
         return $this->runTimeoutSeconds;
+    }
+
+    public function acknowledgementModel(): string
+    {
+        return $this->acknowledgementModel;
+    }
+
+    public function acknowledgementTimeoutSeconds(): int
+    {
+        return $this->acknowledgementTimeoutSeconds;
+    }
+
+    public function taskDeadlineSeconds(): int
+    {
+        return $this->taskDeadlineSeconds;
+    }
+
+    public function maxRetries(): int
+    {
+        return $this->maxRetries;
+    }
+
+    public function retryDelaySeconds(): int
+    {
+        return $this->retryDelaySeconds;
+    }
+
+    public function notificationPreference(): string
+    {
+        return $this->notificationPreference;
     }
 
     private function assertValidTag(string $tag): void

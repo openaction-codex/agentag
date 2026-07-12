@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\AgentTag\Runner\TokenUsage;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -12,10 +13,14 @@ class AgentRun
 {
     public const STATUS_ACCEPTED = 'accepted';
     public const STATUS_RUNNING = 'running';
+    public const STATUS_WAITING = 'waiting';
     public const STATUS_INTERRUPT_REQUESTED = 'interrupt_requested';
     public const STATUS_INTERRUPTED = 'interrupted';
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_FAILED = 'failed';
+
+    public const INTERRUPT_CANCEL = 'cancel';
+    public const INTERRUPT_STEER = 'steer';
 
     public const WORKSPACE_CLEANUP_RETAINED = 'retained';
     public const WORKSPACE_CLEANUP_CLEANED = 'cleaned';
@@ -25,11 +30,67 @@ class AgentRun
     #[ORM\Column]
     private ?int $id = null;
 
-    /**
-     * @var Collection<int, RunEvent>
-     */
+    /** @var Collection<int, RunEvent> */
     #[ORM\OneToMany(targetEntity: RunEvent::class, mappedBy: 'run')]
     private Collection $events;
+
+    #[ORM\Column(length: 160, nullable: true)]
+    private ?string $title = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $acknowledgement = null;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $taskPostId = null;
+
+    #[ORM\Column(length: 120, nullable: true)]
+    private ?string $requesterName = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $startedAt = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $finishedAt = null;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $codexThreadId = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $currentStage = null;
+
+    /** @var list<string> */
+    #[ORM\Column(type: 'json')]
+    private array $completedStages = [];
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $pendingSteering = null;
+
+    #[ORM\Column(length: 16, nullable: true)]
+    private ?string $interruptionKind = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $retainedUntil = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $wakeAt = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $waitReason = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $deadlineAt = null;
+
+    #[ORM\Column]
+    private int $attempt = 0;
+
+    #[ORM\Column]
+    private int $maxRetries = 2;
+
+    #[ORM\Column]
+    private int $retryDelaySeconds = 60;
+
+    #[ORM\Column(length: 24)]
+    private string $notificationPreference = 'milestones';
 
     /**
      * @param list<string> $artifacts
@@ -60,9 +121,7 @@ class AgentRun
         private ?string $requesterId = null,
         #[ORM\Column(type: 'text', nullable: true)]
         private ?string $workspacePath = null,
-        /**
-         * @var list<string>
-         */
+        /** @var list<string> */
         #[ORM\Column(type: 'json')]
         private array $artifacts = [],
         #[ORM\Column(length: 32)]
@@ -99,6 +158,16 @@ class AgentRun
     public function createdAt(): \DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function startedAt(): ?\DateTimeImmutable
+    {
+        return $this->startedAt;
+    }
+
+    public function finishedAt(): ?\DateTimeImmutable
+    {
+        return $this->finishedAt;
     }
 
     public function inputSummary(): ?string
@@ -141,14 +210,17 @@ class AgentRun
         return $this->requesterId;
     }
 
+    public function requesterName(): ?string
+    {
+        return $this->requesterName;
+    }
+
     public function workspacePath(): ?string
     {
         return $this->workspacePath;
     }
 
-    /**
-     * @return list<string>
-     */
+    /** @return list<string> */
     public function artifacts(): array
     {
         return $this->artifacts;
@@ -159,9 +231,7 @@ class AgentRun
         return $this->workspaceCleanupState;
     }
 
-    /**
-     * @return Collection<int, RunEvent>
-     */
+    /** @return Collection<int, RunEvent> */
     public function events(): Collection
     {
         return $this->events;
@@ -192,126 +262,220 @@ class AgentRun
         return $this->totalTokens;
     }
 
-    public function getId(): ?int
+    public function title(): string
     {
-        return $this->id();
+        return $this->title ?? 'Working on your request';
     }
 
-    public function getSession(): ChatSession
+    public function acknowledgement(): ?string
     {
-        return $this->session();
+        return $this->acknowledgement;
     }
 
-    public function getStatus(): string
+    public function taskPostId(): ?string
     {
-        return $this->status();
+        return $this->taskPostId;
     }
 
-    public function getCreatedAt(): \DateTimeImmutable
+    public function codexThreadId(): ?string
     {
-        return $this->createdAt();
+        return $this->codexThreadId;
     }
 
-    public function getInputSummary(): ?string
+    public function currentStage(): ?string
     {
-        return $this->inputSummary();
+        return $this->currentStage;
     }
 
-    public function getContextSnapshot(): ?string
+    /** @return list<string> */
+    public function completedStages(): array
     {
-        return $this->contextSnapshot();
+        return $this->completedStages;
     }
 
-    public function getOutputSummary(): ?string
+    public function pendingSteering(): ?string
     {
-        return $this->outputSummary();
+        return $this->pendingSteering;
     }
 
-    public function getWorkflowName(): ?string
+    public function interruptionKind(): ?string
     {
-        return $this->workflowName();
+        return $this->interruptionKind;
     }
 
-    public function getWorkflowVersion(): ?string
+    public function retainedUntil(): ?\DateTimeImmutable
     {
-        return $this->workflowVersion();
+        return $this->retainedUntil;
     }
 
-    public function getWorkflowRevision(): ?string
+    public function wakeAt(): ?\DateTimeImmutable
     {
-        return $this->workflowRevision();
+        return $this->wakeAt;
     }
 
-    public function getSourceEventId(): ?string
+    public function waitReason(): ?string
     {
-        return $this->sourceEventId();
+        return $this->waitReason;
     }
 
-    public function getRequesterId(): ?string
+    public function deadlineAt(): ?\DateTimeImmutable
     {
-        return $this->requesterId();
+        return $this->deadlineAt;
     }
 
-    public function getWorkspacePath(): ?string
+    public function attempt(): int
     {
-        return $this->workspacePath();
+        return $this->attempt;
     }
 
-    /**
-     * @return list<string>
-     */
-    public function getArtifacts(): array
+    public function maxRetries(): int
     {
-        return $this->artifacts();
+        return $this->maxRetries;
     }
 
-    public function getWorkspaceCleanupState(): string
+    public function retryDelaySeconds(): int
     {
-        return $this->workspaceCleanupState();
+        return $this->retryDelaySeconds;
     }
 
-    /**
-     * @return Collection<int, RunEvent>
-     */
-    public function getEvents(): Collection
+    public function notificationPreference(): string
     {
-        return $this->events();
+        return $this->notificationPreference;
     }
 
-    public function getLogSummary(): ?string
-    {
-        return $this->logSummary();
+    public function initializeTask(
+        string $title,
+        string $acknowledgement,
+        ?string $requesterName,
+        \DateTimeImmutable $deadlineAt,
+        int $maxRetries,
+        int $retryDelaySeconds,
+        string $notificationPreference,
+    ): void {
+        $this->configureTask($requesterName, $deadlineAt, $maxRetries, $retryDelaySeconds, $notificationPreference);
+        $this->presentTask($title, $acknowledgement);
     }
 
-    public function getExitCode(): ?int
-    {
-        return $this->exitCode();
+    public function configureTask(
+        ?string $requesterName,
+        \DateTimeImmutable $deadlineAt,
+        int $maxRetries,
+        int $retryDelaySeconds,
+        string $notificationPreference,
+    ): void {
+        $this->requesterName = $requesterName;
+        $this->deadlineAt = $deadlineAt;
+        $this->maxRetries = $maxRetries;
+        $this->retryDelaySeconds = $retryDelaySeconds;
+        $this->notificationPreference = $notificationPreference;
     }
 
-    public function getInputTokens(): ?int
+    public function presentTask(string $title, string $acknowledgement): void
     {
-        return $this->inputTokens();
+        $this->title = $title;
+        $this->acknowledgement = $acknowledgement;
+        $this->currentStage = $acknowledgement;
     }
 
-    public function getOutputTokens(): ?int
+    public function assignTaskPost(string $postId): void
     {
-        return $this->outputTokens();
+        $this->taskPostId = $postId;
     }
 
-    public function getTotalTokens(): ?int
+    public function changeNotificationPreference(string $preference): void
     {
-        return $this->totalTokens();
+        if (in_array($preference, ['all', 'milestones', 'completion'], true)) {
+            $this->notificationPreference = $preference;
+        }
     }
 
-    #[\Override]
-    public function __toString(): string
+    public function recordCodexThread(string $threadId): void
     {
-        return sprintf('Run #%s (%s)', $this->id ?? 'new', $this->status);
+        $this->codexThreadId = $threadId;
     }
 
-    /**
-     * @param list<string> $artifacts
-     */
+    public function markRunning(): void
+    {
+        $this->status = self::STATUS_RUNNING;
+        $this->startedAt ??= new \DateTimeImmutable();
+        $this->wakeAt = null;
+        $this->waitReason = null;
+        $this->interruptionKind = null;
+        ++$this->attempt;
+    }
+
+    public function updateStage(string $stage): void
+    {
+        $stage = trim(preg_replace('/\s+/', ' ', $stage) ?? $stage);
+        if ('' === $stage || $stage === $this->currentStage) {
+            return;
+        }
+
+        if (null !== $this->currentStage && !in_array($this->currentStage, $this->completedStages, true)) {
+            $this->completedStages[] = $this->currentStage;
+        }
+        $this->currentStage = substr($stage, 0, 240);
+    }
+
+    public function requestCancellation(): void
+    {
+        if ($this->isTerminal()) {
+            return;
+        }
+        $this->interruptionKind = self::INTERRUPT_CANCEL;
+        $this->status = self::STATUS_INTERRUPT_REQUESTED;
+    }
+
+    public function requestSteering(string $instruction): void
+    {
+        $instruction = trim($instruction);
+        if ('' === $instruction) {
+            return;
+        }
+        $this->pendingSteering = null === $this->pendingSteering
+            ? $instruction
+            : $this->pendingSteering."\n\n".$instruction;
+        $this->interruptionKind = self::INTERRUPT_STEER;
+        $this->status = self::STATUS_RUNNING === $this->status
+            ? self::STATUS_INTERRUPT_REQUESTED
+            : self::STATUS_ACCEPTED;
+    }
+
+    public function takePendingSteering(): ?string
+    {
+        $steering = $this->pendingSteering;
+        $this->pendingSteering = null;
+
+        return $steering;
+    }
+
+    public function prepareRetry(string $instruction): void
+    {
+        $this->pendingSteering = trim($instruction);
+        $this->status = self::STATUS_ACCEPTED;
+        $this->finishedAt = null;
+        $this->exitCode = null;
+        $this->interruptionKind = null;
+        $this->wakeAt = null;
+        $this->waitReason = null;
+    }
+
+    public function waitUntil(\DateTimeImmutable $wakeAt, string $reason): void
+    {
+        $this->status = self::STATUS_WAITING;
+        $this->wakeAt = $wakeAt;
+        $this->waitReason = $reason;
+        $this->updateStage($reason);
+    }
+
+    public function wake(): void
+    {
+        $this->status = self::STATUS_ACCEPTED;
+        $this->wakeAt = null;
+        $this->waitReason = null;
+    }
+
+    /** @param list<string> $artifacts */
     public function recordRunnerResult(
         string $status,
         string $outputSummary,
@@ -319,7 +483,7 @@ class AgentRun
         string $workspacePath,
         array $artifacts,
         int $exitCode,
-        ?\App\AgentTag\Runner\TokenUsage $tokenUsage,
+        ?TokenUsage $tokenUsage,
     ): void {
         $this->status = $status;
         $this->outputSummary = $outputSummary;
@@ -327,23 +491,16 @@ class AgentRun
         $this->workspacePath = $workspacePath;
         $this->artifacts = $artifacts;
         $this->exitCode = $exitCode;
-        $this->inputTokens = $tokenUsage?->inputTokens();
-        $this->outputTokens = $tokenUsage?->outputTokens();
-        $this->totalTokens = $tokenUsage?->totalTokens();
-    }
-
-    public function markRunning(): void
-    {
-        $this->status = self::STATUS_RUNNING;
-    }
-
-    public function requestInterruption(): void
-    {
+        $this->inputTokens = ($this->inputTokens ?? 0) + ($tokenUsage?->inputTokens() ?? 0);
+        $this->outputTokens = ($this->outputTokens ?? 0) + ($tokenUsage?->outputTokens() ?? 0);
+        $this->totalTokens = ($this->totalTokens ?? 0) + ($tokenUsage?->totalTokens() ?? 0);
         if ($this->isTerminal()) {
-            return;
+            $this->finishedAt = new \DateTimeImmutable();
+            if (null !== $this->currentStage && !in_array($this->currentStage, $this->completedStages, true)) {
+                $this->completedStages[] = $this->currentStage;
+            }
+            $this->currentStage = null;
         }
-
-        $this->status = self::STATUS_INTERRUPT_REQUESTED;
     }
 
     public function markInterrupted(string $summary, ?string $workspacePath = null): void
@@ -352,6 +509,8 @@ class AgentRun
         $this->outputSummary = $summary;
         $this->logSummary = $summary;
         $this->exitCode = 130;
+        $this->finishedAt = new \DateTimeImmutable();
+        $this->retainedUntil = $this->finishedAt->modify('+24 hours');
         if (null !== $workspacePath) {
             $this->workspacePath = $workspacePath;
         }
@@ -360,6 +519,21 @@ class AgentRun
     public function interruptionRequested(): bool
     {
         return self::STATUS_INTERRUPT_REQUESTED === $this->status;
+    }
+
+    public function deadlineExceeded(?\DateTimeImmutable $now = null): bool
+    {
+        return null !== $this->deadlineAt && $this->deadlineAt <= ($now ?? new \DateTimeImmutable());
+    }
+
+    public function canRetry(): bool
+    {
+        return $this->attempt <= $this->maxRetries && !$this->deadlineExceeded();
+    }
+
+    public function isActive(): bool
+    {
+        return in_array($this->status, [self::STATUS_ACCEPTED, self::STATUS_RUNNING, self::STATUS_WAITING, self::STATUS_INTERRUPT_REQUESTED], true);
     }
 
     public function isTerminal(): bool

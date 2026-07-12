@@ -14,7 +14,6 @@ final readonly class MattermostSessionMapper
         }
 
         return new ChatSessionReference(
-            'mattermost',
             $event->teamId(),
             $event->channelId(),
             $threadId,

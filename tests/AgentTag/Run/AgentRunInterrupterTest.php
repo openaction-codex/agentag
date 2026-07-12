@@ -28,7 +28,7 @@ final class AgentRunInterrupterTest extends KernelTestCase
     public function testItRequestsInterruptionForActiveRunsInTheSameSession(): void
     {
         $entityManager = $this->entityManager();
-        $session = new ChatSession('mattermost:team:channel:thread', 'mattermost', 'team', 'channel', 'thread', new \DateTimeImmutable());
+        $session = new ChatSession('mattermost:team:channel:thread', 'team', 'channel', 'thread', new \DateTimeImmutable());
         $activeRun = new AgentRun($session, AgentRun::STATUS_RUNNING, new \DateTimeImmutable(), sourceEventId: 'old-post');
         $completedRun = new AgentRun($session, AgentRun::STATUS_COMPLETED, new \DateTimeImmutable(), sourceEventId: 'done-post');
         $entityManager->persist($session);
@@ -41,18 +41,42 @@ final class AgentRunInterrupterTest extends KernelTestCase
             new RunEventRecorder($entityManager, new SensitiveTextRedactor(), new NullLogger()),
         );
 
-        $count = $interrupter->interruptActiveRuns(
-            new ChatSessionReference('mattermost', 'team', 'channel', 'thread'),
+        $interrupted = $interrupter->cancelActiveRun(
+            new ChatSessionReference('team', 'channel', 'thread'),
             'new-post',
             'user',
         );
 
-        self::assertSame(1, $count);
+        self::assertSame($activeRun, $interrupted);
         self::assertSame(AgentRun::STATUS_INTERRUPT_REQUESTED, $activeRun->status());
+        self::assertSame(AgentRun::INTERRUPT_CANCEL, $activeRun->interruptionKind());
         self::assertSame(AgentRun::STATUS_COMPLETED, $completedRun->status());
         $events = $entityManager->getRepository(RunEvent::class)->findBy(['run' => $activeRun]);
         self::assertCount(1, $events);
-        self::assertSame(RunEvent::TYPE_INTERRUPTION_REQUESTED, $events[0]->type());
+        self::assertSame(RunEvent::TYPE_CANCELLATION_REQUESTED, $events[0]->type());
+    }
+
+    public function testItQueuesSteeringOnTheSameActiveRun(): void
+    {
+        $entityManager = $this->entityManager();
+        $session = new ChatSession('mattermost:team:channel:thread', 'team', 'channel', 'thread', new \DateTimeImmutable());
+        $run = new AgentRun($session, AgentRun::STATUS_RUNNING, new \DateTimeImmutable());
+        $entityManager->persist($session);
+        $entityManager->persist($run);
+        $entityManager->flush();
+        $interrupter = new AgentRunInterrupter($entityManager);
+
+        $steered = $interrupter->steerActiveRun(
+            new ChatSessionReference('team', 'channel', 'thread'),
+            'Focus on the backend.',
+            'new-post',
+            'user',
+        );
+
+        self::assertSame($run, $steered);
+        self::assertSame('Focus on the backend.', $run->pendingSteering());
+        self::assertSame(AgentRun::INTERRUPT_STEER, $run->interruptionKind());
+        self::assertSame(AgentRun::STATUS_INTERRUPT_REQUESTED, $run->status());
     }
 
     private function entityManager(): EntityManagerInterface

@@ -26,13 +26,11 @@ final readonly class SessionContextSnapshotBuilder
     ): string {
         $sections = [
             sprintf('Session: %s', $session->sessionKey()),
-            sprintf('Platform: %s', $session->platform()),
             sprintf('Thread: %s', $session->threadId()),
             sprintf('Agent: %s', $agent->name()),
             sprintf('Workspace template: %s', $agent->workspacePath()),
             sprintf('Workspace revision: %s', $agent->workspaceRevision() ?? '(none)'),
             sprintf('Session workspace: %s', $session->workspacePath() ?? '(not prepared)'),
-            sprintf('Session summary: %s', $session->summary() ?? '(none)'),
             $this->formatThreadMessages($threadContext),
             $this->formatPriorRuns($priorRuns),
             'Relevant links/artifacts: none recorded.',

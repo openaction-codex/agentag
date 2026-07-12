@@ -19,53 +19,89 @@ final readonly class AgentRunInterrupter implements RunInterrupter
     }
 
     #[\Override]
-    public function interruptActiveRuns(ChatSessionReference $reference, string $sourceEventId, string $requesterId): int
+    public function cancelActiveRun(ChatSessionReference $reference, string $sourceEventId, string $requesterId): ?AgentRun
     {
-        $session = $this->entityManager->getRepository(ChatSession::class)->findOneBy([
-            'sessionKey' => $reference->key(),
+        $run = $this->activeRun($reference);
+        if (null === $run) {
+            return null;
+        }
+
+        $run->requestCancellation();
+        $this->recordControl($run, RunEvent::TYPE_CANCELLATION_REQUESTED, 'Cancellation requested.', $reference, $sourceEventId, $requesterId);
+
+        return $run;
+    }
+
+    #[\Override]
+    public function steerActiveRun(ChatSessionReference $reference, string $instruction, string $sourceEventId, string $requesterId): ?AgentRun
+    {
+        $run = $this->activeRun($reference);
+        if (null === $run) {
+            return null;
+        }
+
+        $run->requestSteering($instruction);
+        $this->recordControl($run, RunEvent::TYPE_STEERING_RECEIVED, 'Steering message queued for the active task.', $reference, $sourceEventId, $requesterId);
+
+        return $run;
+    }
+
+    #[\Override]
+    public function retryLatestRun(ChatSessionReference $reference, string $instruction): ?AgentRun
+    {
+        $session = $this->session($reference);
+        if (null === $session) {
+            return null;
+        }
+        $run = $this->entityManager->getRepository(AgentRun::class)->findOneBy(['session' => $session], ['id' => 'DESC']);
+        if (!$run instanceof AgentRun || !$run->isTerminal()) {
+            return null;
+        }
+
+        $run->prepareRetry($instruction);
+        $this->runEventRecorder?->record($run, RunEvent::TYPE_RETRY_REQUESTED, 'Task retry requested.', [
+            'thread_id' => $reference->threadId(),
         ]);
-        if (!$session instanceof ChatSession) {
-            return 0;
+        $this->entityManager->flush();
+
+        return $run;
+    }
+
+    private function activeRun(ChatSessionReference $reference): ?AgentRun
+    {
+        $session = $this->session($reference);
+        if (null === $session) {
+            return null;
         }
 
-        $runs = $this->entityManager->getRepository(AgentRun::class)->createQueryBuilder('agentRun')
-            ->andWhere('agentRun.session = :session')
-            ->andWhere('agentRun.status IN (:statuses)')
-            ->andWhere('agentRun.sourceEventId IS NULL OR agentRun.sourceEventId <> :sourceEventId')
+        $run = $this->entityManager->getRepository(AgentRun::class)->createQueryBuilder('run')
+            ->andWhere('run.session = :session')
+            ->andWhere('run.status IN (:statuses)')
             ->setParameter('session', $session)
-            ->setParameter('statuses', [AgentRun::STATUS_ACCEPTED, AgentRun::STATUS_RUNNING, AgentRun::STATUS_INTERRUPT_REQUESTED])
-            ->setParameter('sourceEventId', $sourceEventId)
-            ->orderBy('agentRun.id', 'DESC')
+            ->setParameter('statuses', [AgentRun::STATUS_ACCEPTED, AgentRun::STATUS_RUNNING, AgentRun::STATUS_WAITING, AgentRun::STATUS_INTERRUPT_REQUESTED])
+            ->orderBy('run.id', 'DESC')
+            ->setMaxResults(1)
             ->getQuery()
-            ->toIterable()
-        ;
+            ->getOneOrNullResult();
 
-        $count = 0;
-        foreach ($runs as $run) {
-            if (!$run instanceof AgentRun || $run->isTerminal()) {
-                continue;
-            }
+        return $run instanceof AgentRun ? $run : null;
+    }
 
-            $run->requestInterruption();
-            ++$count;
-            $this->runEventRecorder?->record($run, RunEvent::TYPE_INTERRUPTION_REQUESTED, 'Interruption requested by a newer Mattermost message.', [
-                'platform' => $reference->platform(),
-                'thread_id' => $reference->threadId(),
-                'source_event_id' => $sourceEventId,
-                'requester_id' => $requesterId,
-            ]);
-        }
+    private function session(ChatSessionReference $reference): ?ChatSession
+    {
+        $session = $this->entityManager->getRepository(ChatSession::class)->findOneBy(['sessionKey' => $reference->key()]);
 
-        if ($count > 0) {
-            $this->entityManager->flush();
-            $this->logger?->info('Requested active run interruption.', [
-                'session_key' => $reference->key(),
-                'source_event_id' => $sourceEventId,
-                'requester_id' => $requesterId,
-                'count' => $count,
-            ]);
-        }
+        return $session instanceof ChatSession ? $session : null;
+    }
 
-        return $count;
+    private function recordControl(AgentRun $run, string $type, string $message, ChatSessionReference $reference, string $sourceEventId, string $requesterId): void
+    {
+        $this->runEventRecorder?->record($run, $type, $message, [
+            'thread_id' => $reference->threadId(),
+            'source_event_id' => $sourceEventId,
+            'requester_id' => $requesterId,
+        ]);
+        $this->entityManager->flush();
+        $this->logger?->info($message, ['run_id' => $run->id(), 'source_event_id' => $sourceEventId]);
     }
 }

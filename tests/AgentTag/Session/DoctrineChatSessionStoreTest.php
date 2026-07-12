@@ -31,7 +31,7 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         self::assertInstanceOf(ChatSessionStore::class, $store);
         $agent = $this->agent();
 
-        $reference = new ChatSessionReference('mattermost', 'team-id', 'channel-id', 'root-id');
+        $reference = new ChatSessionReference('team-id', 'channel-id', 'root-id');
 
         $store->recordRun($reference, 'first input token=secret-token', new ChatThreadContext([
             new ChatThreadMessage('root-id', 'user-a', '@Codex help password=hunter2'),
@@ -52,7 +52,6 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
 
         $session = $sessions[0];
         self::assertSame('mattermost:team-id:channel-id:root-id', $session->sessionKey());
-        self::assertSame('mattermost', $session->platform());
         self::assertSame('team-id', $session->teamId());
         self::assertSame('channel-id', $session->channelId());
         self::assertSame('root-id', $session->threadId());

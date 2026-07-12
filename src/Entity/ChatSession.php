@@ -16,17 +16,13 @@ class ChatSession
     #[ORM\Column]
     private ?int $id = null;
 
-    /**
-     * @var Collection<int, AgentRun>
-     */
+    /** @var Collection<int, AgentRun> */
     #[ORM\OneToMany(targetEntity: AgentRun::class, mappedBy: 'session')]
     private Collection $runs;
 
     public function __construct(
         #[ORM\Column(length: 255)]
         private string $sessionKey,
-        #[ORM\Column(length: 32)]
-        private string $platform,
         #[ORM\Column(length: 255)]
         private string $teamId,
         #[ORM\Column(length: 255)]
@@ -35,8 +31,6 @@ class ChatSession
         private string $threadId,
         #[ORM\Column]
         private \DateTimeImmutable $lastActivityAt,
-        #[ORM\Column(type: 'text', nullable: true)]
-        private ?string $summary = null,
         #[ORM\Column(type: 'text', nullable: true)]
         private ?string $workspacePath = null,
     ) {
@@ -51,11 +45,6 @@ class ChatSession
     public function sessionKey(): string
     {
         return $this->sessionKey;
-    }
-
-    public function platform(): string
-    {
-        return $this->platform;
     }
 
     public function teamId(): string
@@ -73,11 +62,6 @@ class ChatSession
         return $this->threadId;
     }
 
-    public function summary(): ?string
-    {
-        return $this->summary;
-    }
-
     public function lastActivityAt(): \DateTimeImmutable
     {
         return $this->lastActivityAt;
@@ -88,86 +72,10 @@ class ChatSession
         return $this->workspacePath;
     }
 
-    /**
-     * @return Collection<int, AgentRun>
-     */
+    /** @return Collection<int, AgentRun> */
     public function runs(): Collection
     {
         return $this->runs;
-    }
-
-    public function getId(): ?int
-    {
-        return $this->id();
-    }
-
-    public function getSessionKey(): string
-    {
-        return $this->sessionKey();
-    }
-
-    public function getPlatform(): string
-    {
-        return $this->platform();
-    }
-
-    public function getTeamId(): string
-    {
-        return $this->teamId();
-    }
-
-    public function getChannelId(): string
-    {
-        return $this->channelId();
-    }
-
-    public function getThreadId(): string
-    {
-        return $this->threadId();
-    }
-
-    public function getSummary(): ?string
-    {
-        return $this->summary();
-    }
-
-    public function getLastActivityAt(): \DateTimeImmutable
-    {
-        return $this->lastActivityAt();
-    }
-
-    public function getWorkspacePath(): ?string
-    {
-        return $this->workspacePath();
-    }
-
-    /**
-     * @return Collection<int, AgentRun>
-     */
-    public function getRuns(): Collection
-    {
-        return $this->runs();
-    }
-
-    public function getInputTokens(): int
-    {
-        return $this->inputTokens();
-    }
-
-    public function getOutputTokens(): int
-    {
-        return $this->outputTokens();
-    }
-
-    public function getTotalTokens(): int
-    {
-        return $this->totalTokens();
-    }
-
-    #[\Override]
-    public function __toString(): string
-    {
-        return sprintf('Session #%s (%s)', $this->id ?? 'new', $this->platform);
     }
 
     public function touch(\DateTimeImmutable $now): void
@@ -195,9 +103,7 @@ class ChatSession
         return $this->sumRunTokens(static fn (AgentRun $run): ?int => $run->totalTokens());
     }
 
-    /**
-     * @param callable(AgentRun): ?int $tokenAccessor
-     */
+    /** @param callable(AgentRun): ?int $tokenAccessor */
     private function sumRunTokens(callable $tokenAccessor): int
     {
         $total = 0;

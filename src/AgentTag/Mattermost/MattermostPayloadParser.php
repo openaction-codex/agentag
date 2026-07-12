@@ -20,6 +20,7 @@ final readonly class MattermostPayloadParser
             $this->optionalString($payload, 'team_id'),
             $this->optionalString($payload, 'user_id'),
             $this->optionalString($payload, 'token'),
+            $this->optionalString($payload, 'user_name'),
         );
     }
 

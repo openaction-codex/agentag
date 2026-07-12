@@ -13,6 +13,37 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 final class MattermostApiNotifierTest extends TestCase
 {
+    public function testItCreatesAndUpdatesOneInteractiveTaskPost(): void
+    {
+        $requests = [];
+        $responses = [new MockResponse('{"id":"task-post-id"}'), new MockResponse('{"id":"task-post-id"}')];
+        $client = new MockHttpClient(static function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
+            $requests[] = [$method, $url, self::requestBody($options)];
+
+            return array_shift($responses) ?? new MockResponse('', ['http_code' => 500]);
+        });
+        $notifier = new MattermostApiNotifier($client, new MattermostApiSettings('https://mattermost.example.test', 'bot-token', 20));
+        $props = ['attachments' => [['actions' => [['id' => 'cancel', 'name' => 'Cancel']]]]];
+
+        $postId = $notifier->createPost($this->publicChannelEvent(), '🟡 Investigating', $props);
+        $updated = $notifier->updatePost((string) $postId, '✅ Complete', $props);
+
+        self::assertSame('task-post-id', $postId);
+        self::assertTrue($updated);
+        self::assertSame('POST', $requests[0][0]);
+        self::assertSame('https://mattermost.example.test/api/v4/posts', $requests[0][1]);
+        $createdBody = $requests[0][2];
+        self::assertIsArray($createdBody);
+        self::assertArrayHasKey('props', $createdBody);
+        self::assertSame($props, $createdBody['props']);
+        self::assertSame('PUT', $requests[1][0]);
+        self::assertSame('https://mattermost.example.test/api/v4/posts/task-post-id/patch', $requests[1][1]);
+        $updatedBody = $requests[1][2];
+        self::assertIsArray($updatedBody);
+        self::assertArrayHasKey('message', $updatedBody);
+        self::assertSame('✅ Complete', $updatedBody['message']);
+    }
+
     public function testItJoinsPublicChannelsAndRetriesDeniedTypingIndicators(): void
     {
         $requests = [];
