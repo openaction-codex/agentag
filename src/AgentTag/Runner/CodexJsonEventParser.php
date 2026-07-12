@@ -58,6 +58,9 @@ final class CodexJsonEventParser
             if (!is_array($data)) {
                 continue;
             }
+            if ('thread.started' === ($data['type'] ?? null) && is_string($data['thread_id'] ?? null)) {
+                $this->threadId = $data['thread_id'];
+            }
 
             $message = $this->agentMessageFromData($data);
             if (null !== $message) {

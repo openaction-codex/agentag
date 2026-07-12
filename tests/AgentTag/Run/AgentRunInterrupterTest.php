@@ -77,6 +77,15 @@ final class AgentRunInterrupterTest extends KernelTestCase
         self::assertSame('Focus on the backend.', $run->pendingSteering());
         self::assertSame(AgentRun::INTERRUPT_STEER, $run->interruptionKind());
         self::assertSame(AgentRun::STATUS_INTERRUPT_REQUESTED, $run->status());
+
+        $interrupter->steerActiveRun(
+            new ChatSessionReference('team', 'channel', 'thread'),
+            'Also ignore the UI.',
+            'newer-post',
+            'user',
+        );
+        self::assertSame("Focus on the backend.\n\nAlso ignore the UI.", $run->pendingSteering());
+        self::assertSame(AgentRun::STATUS_INTERRUPT_REQUESTED, $run->status());
     }
 
     private function entityManager(): EntityManagerInterface

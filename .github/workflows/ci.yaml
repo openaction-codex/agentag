@@ -7,6 +7,20 @@ on:
 jobs:
     checks:
         runs-on: ubuntu-latest
+        services:
+            postgres:
+                image: postgres:16-alpine
+                env:
+                    POSTGRES_DB: agentag_test
+                    POSTGRES_USER: agentag
+                    POSTGRES_PASSWORD: agentag
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U agentag -d agentag_test"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 10
 
         steps:
             - name: Checkout
@@ -33,3 +47,12 @@ jobs:
 
             - name: Run PHPUnit
               run: composer test
+
+            - name: Verify PostgreSQL migrations and mapping
+              env:
+                  APP_ENV: prod
+                  APP_DEBUG: 0
+                  DATABASE_URL: postgresql://agentag:agentag@127.0.0.1:5432/agentag_test?serverVersion=16&charset=utf8
+              run: |
+                  php bin/console doctrine:migrations:migrate --no-interaction
+                  php bin/console doctrine:schema:validate

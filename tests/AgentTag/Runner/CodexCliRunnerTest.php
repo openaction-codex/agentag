@@ -102,6 +102,7 @@ final class CodexCliRunnerTest extends TestCase
 
         self::assertTrue($result->successful());
         self::assertSame('Final answer from JSONL.', $result->finalMessage());
+        self::assertSame('thread-id', $result->sessionId());
     }
 
     public function testItDoesNotExposeJsonEventsWhenCodexProducesNoAgentMessage(): void

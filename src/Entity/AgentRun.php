@@ -429,14 +429,14 @@ class AgentRun
     public function requestSteering(string $instruction): void
     {
         $instruction = trim($instruction);
-        if ('' === $instruction) {
+        if ('' === $instruction || (self::STATUS_INTERRUPT_REQUESTED === $this->status && self::INTERRUPT_CANCEL === $this->interruptionKind)) {
             return;
         }
         $this->pendingSteering = null === $this->pendingSteering
             ? $instruction
             : $this->pendingSteering."\n\n".$instruction;
         $this->interruptionKind = self::INTERRUPT_STEER;
-        $this->status = self::STATUS_RUNNING === $this->status
+        $this->status = in_array($this->status, [self::STATUS_RUNNING, self::STATUS_INTERRUPT_REQUESTED], true)
             ? self::STATUS_INTERRUPT_REQUESTED
             : self::STATUS_ACCEPTED;
     }
