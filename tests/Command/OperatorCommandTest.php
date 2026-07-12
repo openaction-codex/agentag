@@ -2,14 +2,10 @@
 
 namespace App\Tests\Command;
 
-use App\AgentTag\Memory\GlobalMemoryCommandContext;
-use App\AgentTag\Memory\GlobalMemoryService;
 use App\AgentTag\Workspace\WorkspaceLayout;
 use App\Command\CleanupWorkspaceCommand;
-use App\Command\DeleteMemoryCommand;
 use App\Command\InspectWorkspaceCommand;
 use App\Command\ListFailedRunsCommand;
-use App\Command\ListMemoriesCommand;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use App\Tests\RefreshDatabaseTrait;
@@ -57,28 +53,6 @@ final class OperatorCommandTest extends KernelTestCase
         self::assertStringContainsString('user-1', $tester->getDisplay());
     }
 
-    public function testMemoryCommandsListAndDeleteExplicitMemories(): void
-    {
-        $this->memoryService()->rememberExplicit(
-            'Prefer concise Mattermost updates.',
-            new GlobalMemoryCommandContext('mattermost', 'user-1', 'thread-1', 'message-1'),
-        );
-
-        $listTester = new CommandTester(new ListMemoriesCommand($this->memoryService()));
-        self::assertSame(Command::SUCCESS, $listTester->execute([]));
-        self::assertStringContainsString('Prefer concise Mattermost updates.', $listTester->getDisplay());
-
-        $memories = $this->memoryService()->all();
-        self::assertCount(1, $memories);
-        $memoryId = $memories[0]->id();
-        self::assertNotNull($memoryId);
-
-        $deleteTester = new CommandTester(new DeleteMemoryCommand($this->memoryService()));
-        self::assertSame(Command::SUCCESS, $deleteTester->execute(['id' => (string) $memoryId]));
-        self::assertStringContainsString(sprintf('Deleted global memory #%d.', $memoryId), $deleteTester->getDisplay());
-        self::assertSame([], $this->memoryService()->all());
-    }
-
     public function testWorkspaceInspectShowsPaths(): void
     {
         $tester = new CommandTester(new InspectWorkspaceCommand($this->workspaceLayout()));
@@ -111,14 +85,6 @@ final class OperatorCommandTest extends KernelTestCase
         self::assertSame(Command::SUCCESS, $forced->execute(['--older-than-days' => '1', '--force' => true]));
         self::assertDirectoryDoesNotExist($runDirectory);
         self::assertSame(AgentRun::WORKSPACE_CLEANUP_CLEANED, $run->workspaceCleanupState());
-    }
-
-    private function memoryService(): GlobalMemoryService
-    {
-        $service = static::getContainer()->get(GlobalMemoryService::class);
-        self::assertInstanceOf(GlobalMemoryService::class, $service);
-
-        return $service;
     }
 
     private function entityManager(): EntityManagerInterface

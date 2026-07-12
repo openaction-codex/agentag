@@ -75,14 +75,3 @@ services:
 
     App\AgentTag\Mattermost\MattermostThreadContextProvider:
         alias: App\AgentTag\Mattermost\MattermostApiThreadContextProvider
-
-    App\AgentTag\Slack\SlackSettings:
-        arguments:
-            $enabled: '%env(bool:SLACK_ENABLED)%'
-            $verificationToken: '%env(string:SLACK_VERIFICATION_TOKEN)%'
-
-    App\AgentTag\Slack\SlackNotifier:
-        alias: App\AgentTag\Slack\NullSlackNotifier
-
-    App\AgentTag\Slack\SlackThreadContextProvider:
-        alias: App\AgentTag\Slack\CurrentSlackThreadContextProvider

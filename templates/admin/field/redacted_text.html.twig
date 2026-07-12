@@ -1,6 +1,0 @@
-{# @var field \EasyCorp\Bundle\EasyAdminBundle\Dto\FieldDto #}
-{% if ea().crud.currentAction == 'detail' %}
-    <pre style="white-space: pre-wrap; word-break: break-word; max-height: 42rem; overflow: auto; margin: 0;">{{ field.formattedValue }}</pre>
-{% else %}
-    <span style="display: inline-block; max-width: 42rem; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; white-space: nowrap;">{{ field.formattedValue }}</span>
-{% endif %}

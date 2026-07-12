@@ -4,8 +4,6 @@ namespace App\Tests\AgentTag\Session;
 
 use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Chat\ChatSessionReference;
-use App\AgentTag\Memory\GlobalMemoryCommandContext;
-use App\AgentTag\Memory\GlobalMemoryService;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Session\ChatThreadContext;
 use App\AgentTag\Session\ChatThreadMessage;
@@ -79,32 +77,6 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         self::assertStringContainsString('Prior run summaries:', (string) $runs[1]->contextSnapshot());
         self::assertStringContainsString('first input token=[REDACTED]', (string) $runs[1]->contextSnapshot());
         self::assertStringContainsString('Bearer [REDACTED]', (string) $runs[1]->contextSnapshot());
-        self::assertStringContainsString("Explicit global memories:\n- (none)", (string) $runs[1]->contextSnapshot());
-    }
-
-    public function testItIncludesExplicitGlobalMemoriesInContextSnapshots(): void
-    {
-        $this->memoryService()->rememberExplicit(
-            'Prefer small implementation commits.',
-            new GlobalMemoryCommandContext('mattermost', 'user-a', 'thread-a', 'message-a'),
-        );
-
-        $store = static::getContainer()->get(ChatSessionStore::class);
-        self::assertInstanceOf(ChatSessionStore::class, $store);
-
-        $store->recordRun(
-            new ChatSessionReference('mattermost', 'team-id', 'channel-id', 'root-id'),
-            'input',
-            new ChatThreadContext([new ChatThreadMessage('root-id', 'user-a', '@Codex help')]),
-            $this->agent(),
-        );
-
-        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
-        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
-        $runs = $entityManager->getRepository(AgentRun::class)->findAll();
-
-        self::assertCount(1, $runs);
-        self::assertStringContainsString('- #1: Prefer small implementation commits.', (string) $runs[0]->contextSnapshot());
     }
 
     private function agent(): \App\AgentTag\Agent\AgentProfile
@@ -148,13 +120,5 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         }
 
         rmdir($path);
-    }
-
-    private function memoryService(): GlobalMemoryService
-    {
-        $service = static::getContainer()->get(GlobalMemoryService::class);
-        self::assertInstanceOf(GlobalMemoryService::class, $service);
-
-        return $service;
     }
 }

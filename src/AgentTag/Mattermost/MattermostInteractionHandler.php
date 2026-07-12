@@ -5,8 +5,6 @@ namespace App\AgentTag\Mattermost;
 use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Chat\ConfiguredTagMentionDetector;
 use App\AgentTag\Chat\InboundEventIdempotencyStore;
-use App\AgentTag\Memory\GlobalMemoryCommandContext;
-use App\AgentTag\Memory\GlobalMemoryCommandHandler;
 use App\AgentTag\Run\RunInterrupter;
 use App\AgentTag\Session\ChatSessionStore;
 use App\Message\RunAgentRunMessage;
@@ -25,7 +23,6 @@ final readonly class MattermostInteractionHandler
         private AgentProfileProvider $agentProfileProvider,
         private MessageBusInterface $messageBus,
         private RunInterrupter $runInterrupter,
-        private ?GlobalMemoryCommandHandler $memoryCommandHandler = null,
         private ?LoggerInterface $logger = null,
     ) {
     }
@@ -50,20 +47,6 @@ final readonly class MattermostInteractionHandler
         }
 
         $this->notifier->showTyping($event);
-
-        if (null !== $this->memoryCommandHandler) {
-            $memoryMessage = $this->memoryCommandHandler->handle($event->text(), new GlobalMemoryCommandContext(
-                'mattermost',
-                $event->userId(),
-                '' === $event->rootId() ? $event->postId() : $event->rootId(),
-                $event->postId(),
-            ));
-            if (null !== $memoryMessage) {
-                $this->notifier->postProgress($event, $memoryMessage);
-
-                return MattermostInteractionResult::handled($memoryMessage);
-            }
-        }
 
         $session = $this->sessionMapper->map($event);
         $interruptedRuns = $this->runInterrupter->interruptActiveRuns($session, $event->eventId(), $event->userId());

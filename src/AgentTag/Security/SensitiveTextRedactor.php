@@ -12,7 +12,6 @@ final readonly class SensitiveTextRedactor
     private const SECRET_PATTERNS = [
         '/\bBearer\s+[A-Za-z0-9._~+\/=-]{8,}\b/i' => 'Bearer [REDACTED]',
         '/\bgh[pousr]_[A-Za-z0-9_]{20,}\b/' => '[REDACTED_GITHUB_TOKEN]',
-        '/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/' => '[REDACTED_SLACK_TOKEN]',
         '/\bAKIA[0-9A-Z]{16}\b/' => '[REDACTED_AWS_ACCESS_KEY]',
         '/-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----/s' => '[REDACTED_PRIVATE_KEY]',
     ];

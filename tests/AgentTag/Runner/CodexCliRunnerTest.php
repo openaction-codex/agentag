@@ -215,8 +215,7 @@ final class FakeRunnerProcess implements RunnerProcess
         private string $lastMessage,
         private string $stdout,
         private string $callbackOutput,
-    )
-    {
+    ) {
     }
 
     #[\Override]
