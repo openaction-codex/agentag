@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\AgentTag\Runner\TaskModelSelection;
 use App\AgentTag\Runner\TokenUsage;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -39,6 +40,12 @@ class AgentRun
 
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $acknowledgement = null;
+
+    #[ORM\Column(length: 32, nullable: true)]
+    private ?string $modelRoute = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $modelSelectionReason = null;
 
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $taskPostId = null;
@@ -275,6 +282,12 @@ class AgentRun
         return $this->acknowledgement;
     }
 
+    public function modelSelection(): TaskModelSelection
+    {
+        return TaskModelSelection::fromRoute($this->modelRoute ?? '', $this->modelSelectionReason ?? '')
+            ?? TaskModelSelection::mainLuna();
+    }
+
     public function taskPostId(): ?string
     {
         return $this->taskPostId;
@@ -359,9 +372,10 @@ class AgentRun
         int $maxRetries,
         int $retryDelaySeconds,
         string $notificationPreference,
+        ?TaskModelSelection $modelSelection = null,
     ): void {
         $this->configureTask($requesterName, $deadlineAt, $maxRetries, $retryDelaySeconds, $notificationPreference);
-        $this->presentTask($title, $acknowledgement);
+        $this->presentTask($title, $acknowledgement, $modelSelection);
     }
 
     public function configureTask(
@@ -378,10 +392,13 @@ class AgentRun
         $this->notificationPreference = $notificationPreference;
     }
 
-    public function presentTask(string $title, string $acknowledgement): void
+    public function presentTask(string $title, string $acknowledgement, ?TaskModelSelection $modelSelection = null): void
     {
+        $modelSelection ??= TaskModelSelection::mainLuna();
         $this->title = $title;
         $this->acknowledgement = $acknowledgement;
+        $this->modelRoute = $modelSelection->route;
+        $this->modelSelectionReason = $modelSelection->reason;
         $this->currentStage = $acknowledgement;
     }
 

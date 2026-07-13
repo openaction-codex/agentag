@@ -18,6 +18,7 @@ use App\AgentTag\Runner\AgentRunnerResult;
 use App\AgentTag\Runner\AgentRunOrchestrator;
 use App\AgentTag\Runner\AgentRunPromptBuilder;
 use App\AgentTag\Runner\TaskContinuation;
+use App\AgentTag\Runner\TaskModelSelection;
 use App\AgentTag\Security\SensitiveTextRedactor;
 use App\AgentTag\Workspace\WorkspaceLayout;
 use App\Entity\AgentRun;
@@ -124,9 +125,12 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
 
         self::assertSame('Fix billing tests', $run->title());
         self::assertSame('Workspace ready. I’m reproducing billing failures.', $run->acknowledgement());
+        self::assertSame('sol-high', $run->modelSelection()->route);
         self::assertSame('task-post', $run->taskPostId());
         self::assertCount(1, $notifier->createdMessages);
         self::assertStringContainsString('Workspace ready. I’m reproducing billing failures.', $notifier->createdMessages[0]);
+        self::assertStringContainsString('Model: **GPT-5.6 Sol · high** via `sol-high`', $notifier->createdMessages[0]);
+        self::assertStringContainsString('Contained feature with several interacting changes.', $notifier->createdMessages[0]);
         self::assertSame([(int) $run->id()], $bus->runIds);
     }
 
@@ -272,6 +276,10 @@ final readonly class DurableTaskPresentationGenerator implements TaskPresentatio
     #[\Override]
     public function generate(string $request, string $workingDirectory): TaskPresentation
     {
-        return new TaskPresentation('Fix billing tests', 'Workspace ready. I’m reproducing billing failures.');
+        return new TaskPresentation(
+            'Fix billing tests',
+            'Workspace ready. I’m reproducing billing failures.',
+            TaskModelSelection::fromRoute('sol-high', 'Contained feature with several interacting changes.'),
+        );
     }
 }

@@ -47,7 +47,7 @@ final readonly class PrepareAgentTaskMessageHandler
         }
 
         $presentation = $this->presentationGenerator->generate($run->inputSummary() ?? 'Handle the Mattermost request.', $workspace);
-        $run->presentTask($presentation->title, $presentation->acknowledgement);
+        $run->presentTask($presentation->title, $presentation->acknowledgement, $presentation->modelSelection);
         $event = $this->progressSinkFactory->eventFor($run);
         $card = $this->renderer->render($run);
         $postId = $this->notifier->createPost($event, $card->message, $card->props);

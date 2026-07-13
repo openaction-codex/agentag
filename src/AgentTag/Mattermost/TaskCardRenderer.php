@@ -31,6 +31,7 @@ final readonly class TaskCardRenderer
         $lines = [
             sprintf('%s **%s**', $icon, $run->title()),
             sprintf('Requested by %s · started %s', $this->requester($run), $this->relativeStart($run)),
+            $this->modelLine($run),
             '',
         ];
 
@@ -73,6 +74,7 @@ final readonly class TaskCardRenderer
         $lines = [
             sprintf('%s **%s**', $icon, $run->title()),
             sprintf('Requested by %s · %s', $this->requester($run), $timing),
+            $this->modelLine($run),
             '',
         ];
 
@@ -86,6 +88,14 @@ final readonly class TaskCardRenderer
         }
 
         return implode("\n", $lines);
+    }
+
+    private function modelLine(AgentRun $run): string
+    {
+        $selection = $run->modelSelection();
+        $delegation = $selection->usesSubagent() ? sprintf(' via `%s`', $selection->agent) : ' in the main agent';
+
+        return sprintf('Model: **%s · %s**%s — %s', $selection->displayModel, $selection->effort, $delegation, $selection->reason);
     }
 
     /** @return array<string, mixed> */

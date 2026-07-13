@@ -11,6 +11,7 @@ final readonly class AgentRunPromptBuilder
         $continuation = null === $run->codexThreadId()
             ? "Session context:\n".($run->contextSnapshot() ?? '(none)')
             : $this->resumeContext($run, $steering);
+        $modelRouting = $this->modelRouting($run);
 
         return trim(<<<PROMPT
 You are AgentTag running a durable task inside an isolated session workspace.
@@ -34,8 +35,35 @@ Durable continuation protocol:
   <!-- agentag:{"action":"wait","seconds":300,"reason":"Waiting for CI"} -->
 - Use 30 to 86400 seconds. Do not emit this comment when the task is complete or needs user input.
 
+{$modelRouting}
+
 {$continuation}
 PROMPT);
+    }
+
+    private function modelRouting(AgentRun $run): string
+    {
+        $selection = $run->modelSelection();
+        if (!$selection->usesSubagent()) {
+            return <<<PROMPT
+Model routing decision (already displayed in the Mattermost task card):
+- Use GPT-5.6 Luna with max reasoning directly in this main agent.
+- Reason: {$selection->reason}
+- Do not delegate unless later user steering materially changes the task's scope or complexity.
+PROMPT;
+        }
+
+        $stageInstruction = null === $run->codexThreadId()
+            ? sprintf('Before substantive task work, spawn exactly the project-scoped `%s` agent without full-history inheritance, give it the core task and all relevant context, wait for it, then verify and synthesize its result.', $selection->agent)
+            : sprintf('Continue using the `%s` route. Reuse its earlier result; invoke it again only when the remaining work needs fresh specialist work.', $selection->agent);
+
+        return <<<PROMPT
+Model routing decision (already displayed in the Mattermost task card):
+- Use {$selection->displayModel} with {$selection->effort} reasoning through the project-scoped `{$selection->agent}` subagent.
+- Reason: {$selection->reason}
+- {$stageInstruction}
+- The Luna main agent remains responsible for coordination, verification, and the final user response.
+PROMPT;
     }
 
     private function resumeContext(AgentRun $run, ?string $steering): string

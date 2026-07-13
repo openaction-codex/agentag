@@ -29,6 +29,7 @@ final class MattermostRunProgressSinkTest extends TestCase
 
         self::assertCount(1, $notifier->updatedPosts);
         self::assertStringContainsString('Reproduced three billing test failures.', $notifier->updatedPosts[0]);
+        self::assertStringContainsString('Model: **GPT-5.6 Luna · max** in the main agent', $notifier->updatedPosts[0]);
         self::assertStringNotContainsString('phpunit output', $notifier->updatedPosts[0]);
         $attachments = $notifier->updatedProps[0]['attachments'] ?? null;
         self::assertIsArray($attachments);
@@ -54,6 +55,7 @@ final class MattermostRunProgressSinkTest extends TestCase
         self::assertStringContainsString('✅ **Fix billing tests**', $notifier->updatedPosts[0]);
         self::assertStringContainsString('✓ Workspace ready', $notifier->updatedPosts[0]);
         self::assertStringContainsString('✓ Complete task and verify results', $notifier->updatedPosts[0]);
+        self::assertStringContainsString('Model: **GPT-5.6 Luna · max** in the main agent', $notifier->updatedPosts[0]);
         self::assertStringNotContainsString('428 tests passed', $notifier->updatedPosts[0]);
         self::assertSame([], $notifier->updatedProps[0]['attachments']);
         self::assertSame(["Cause\nRounding order.\n\nVerification\n• 428 tests passed"], $notifier->createdMessages);

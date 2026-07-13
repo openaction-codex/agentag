@@ -7,7 +7,7 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
     public function __construct(
         private ProcessFactory $processFactory,
         private string $model = 'gpt-5.6-luna',
-        private string $reasoningEffort = 'xhigh',
+        private string $reasoningEffort = 'max',
     ) {
         if ('' === trim($this->model)) {
             throw new \InvalidArgumentException('Codex task model must not be blank.');

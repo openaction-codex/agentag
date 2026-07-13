@@ -40,7 +40,7 @@ AGENTAG_WORKSPACE_PATH=/srv/agentag/workspace
 AGENTAG_CONTEXT_MAX_CHARS=12000
 AGENTAG_RUN_TIMEOUT_SECONDS=1200
 AGENTAG_TASK_MODEL=gpt-5.6-luna
-AGENTAG_TASK_REASONING_EFFORT=xhigh
+AGENTAG_TASK_REASONING_EFFORT=max
 AGENTAG_REDACTION_PATTERNS=
 
 AGENTAG_ACK_MODEL=gpt-5.6-luna
@@ -60,9 +60,9 @@ MATTERMOST_RECENT_REPLY_LIMIT=20
 
 `AGENTAG_NOTIFICATION_PREFERENCE` accepts `all`, `milestones`, or `completion`. Users can override it per task with phrases such as “notify me only when complete” or “notify me on every update.” A request can set a shorter deadline with “deadline in 3 hours” (minutes, hours, and days are supported).
 
-The cheap acknowledgement call uses Codex with `--ephemeral`, `gpt-5.6-luna`, and low reasoning. If it times out or fails, AgentTag posts a deterministic acknowledgement and still queues the main task.
+The cheap acknowledgement call uses Codex with `--ephemeral`, `gpt-5.6-luna`, and low reasoning. It also classifies the request into a persisted model route and writes a short rationale in the user's language. If it times out, fails, or returns an invalid route, AgentTag safely falls back to Luna with max reasoning and still queues the main task.
 
-The main task runner explicitly pins `AGENTAG_TASK_MODEL` and `AGENTAG_TASK_REASONING_EFFORT`; it does not rely on root’s interactive Codex defaults. Project-scoped custom agents can be defined under `.codex/agents/` in the workspace template. Applicable `AGENTS.md` instructions may delegate bounded specialist work to them; for example, a `sol` agent can override the parent with `gpt-5.6-sol` and high reasoning while the primary agent remains on Luna with xhigh reasoning.
+The main task runner explicitly pins `AGENTAG_TASK_MODEL` and `AGENTAG_TASK_REASONING_EFFORT`; it does not rely on root’s interactive Codex defaults. The default parent is GPT-5.6 Luna with max reasoning. The task card shows the selected model, reasoning effort, delegation role, and routing rationale before execution. Project-scoped custom agents under `.codex/agents/` provide Terra/max and Sol/high, Sol/xhigh, or Sol/max specialist routes while the Luna parent remains responsible for coordination and the final answer.
 
 ## Workspace layout
 
