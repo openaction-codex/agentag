@@ -218,7 +218,7 @@ systemctl enable --now agentag-ack-worker
 systemctl enable --now agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4
 ```
 
-The dedicated acknowledgement worker runs the cheap model and creates task cards without waiting behind long jobs. The four `agentag-worker@N` instances allow four different chat threads to run at the same time. Adjust that number to match the VPS. AgentTag still serializes work inside one thread.
+The dedicated acknowledgement worker runs Luna with max reasoning for acknowledgement and routing, creating task cards without waiting behind long jobs. The four `agentag-worker@N` instances allow four different chat threads to run at the same time. Adjust that number to match the VPS. AgentTag still serializes work inside one thread.
 
 Check service state and HTTP endpoints:
 

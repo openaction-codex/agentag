@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 final class AcknowledgementGeneratorTest extends TestCase
 {
-    public function testItUsesTheCheapLowReasoningModelAndKeepsTheUsersLanguage(): void
+    public function testItUsesLunaMaxForRoutingAndKeepsTheUsersLanguage(): void
     {
         $factory = new AcknowledgementProcessFactory('{"title":"Corriger les tests de facturation","acknowledgement":"Espace prêt. Je reproduis les échecs de facturation.","route":"sol-xhigh","selection_reason":"Bug de complexité moyenne dont la cause reste à identifier."}');
         $generator = new AcknowledgementGenerator($factory, new AgentTagSettings('@Codex', '/tmp', acknowledgementModel: 'gpt-5.6-luna'));
@@ -24,7 +24,7 @@ final class AcknowledgementGeneratorTest extends TestCase
         self::assertSame('xhigh', $presentation->modelSelection->effort);
         self::assertSame('Bug de complexité moyenne dont la cause reste à identifier.', $presentation->modelSelection->reason);
         self::assertContains('gpt-5.6-luna', $factory->command);
-        self::assertContains('model_reasoning_effort="low"', $factory->command);
+        self::assertContains('model_reasoning_effort="max"', $factory->command);
         self::assertContains('--ephemeral', $factory->command);
         self::assertStringContainsString('sol-xhigh', $factory->input);
         self::assertStringNotContainsString('sol-high', $factory->input);

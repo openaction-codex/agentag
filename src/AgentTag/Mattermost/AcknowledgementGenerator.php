@@ -54,7 +54,7 @@ PROMPT;
                 '--skip-git-repo-check',
                 '--sandbox', 'read-only',
                 '--model', $this->settings->acknowledgementModel(),
-                '-c', 'model_reasoning_effort="low"',
+                '-c', 'model_reasoning_effort="max"',
                 '--output-last-message', $outputPath,
                 '-',
             ], $workingDirectory, [], $prompt, $this->settings->acknowledgementTimeoutSeconds());
@@ -69,7 +69,7 @@ PROMPT;
 
             return $presentation ?? $fallback;
         } catch (\Throwable $exception) {
-            $this->logger?->warning('Cheap acknowledgement model failed; using the deterministic fallback.', [
+            $this->logger?->warning('Acknowledgement routing model failed; using the deterministic fallback.', [
                 'error' => $exception->getMessage(),
             ]);
 
