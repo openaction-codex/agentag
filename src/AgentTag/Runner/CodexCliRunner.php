@@ -4,8 +4,17 @@ namespace App\AgentTag\Runner;
 
 final readonly class CodexCliRunner implements AgentRunnerInterface
 {
-    public function __construct(private ProcessFactory $processFactory)
-    {
+    public function __construct(
+        private ProcessFactory $processFactory,
+        private string $model = 'gpt-5.6-luna',
+        private string $reasoningEffort = 'xhigh',
+    ) {
+        if ('' === trim($this->model)) {
+            throw new \InvalidArgumentException('Codex task model must not be blank.');
+        }
+        if (!in_array($this->reasoningEffort, ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'], true)) {
+            throw new \InvalidArgumentException('Codex task reasoning effort is invalid.');
+        }
     }
 
     #[\Override]
@@ -22,6 +31,8 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
                 '--dangerously-bypass-approvals-and-sandbox',
                 '--skip-git-repo-check',
                 '--json',
+                '--model', $this->model,
+                '-c', sprintf('model_reasoning_effort="%s"', $this->reasoningEffort),
                 '--cd', $input->workingDirectory(),
                 '--output-last-message', $lastMessagePath,
                 '-',
@@ -31,6 +42,8 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
                 '--dangerously-bypass-approvals-and-sandbox',
                 '--skip-git-repo-check',
                 '--json',
+                '--model', $this->model,
+                '-c', sprintf('model_reasoning_effort="%s"', $this->reasoningEffort),
                 '--output-last-message', $lastMessagePath,
                 $input->resumeSessionId(),
                 '-',

@@ -73,6 +73,11 @@ services:
     App\AgentTag\Runner\ProcessFactory:
         alias: App\AgentTag\Runner\SymfonyProcessFactory
 
+    App\AgentTag\Runner\CodexCliRunner:
+        arguments:
+            $model: '%env(string:AGENTAG_TASK_MODEL)%'
+            $reasoningEffort: '%env(string:AGENTAG_TASK_REASONING_EFFORT)%'
+
     App\AgentTag\Runner\AgentRunnerInterface:
         alias: App\AgentTag\Runner\CodexCliRunner
 

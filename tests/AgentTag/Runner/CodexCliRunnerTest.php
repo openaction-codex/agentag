@@ -60,6 +60,10 @@ final class CodexCliRunnerTest extends TestCase
             '--dangerously-bypass-approvals-and-sandbox',
             '--skip-git-repo-check',
             '--json',
+            '--model',
+            'gpt-5.6-luna',
+            '-c',
+            'model_reasoning_effort="xhigh"',
             '--cd',
             $this->workingDirectory,
             '--output-last-message',
@@ -172,12 +176,32 @@ final class CodexCliRunnerTest extends TestCase
             '--dangerously-bypass-approvals-and-sandbox',
             '--skip-git-repo-check',
             '--json',
+            '--model', 'gpt-5.6-luna',
+            '-c', 'model_reasoning_effort="xhigh"',
             '--output-last-message', $this->artifactsDirectory.'/codex-last-message.txt',
             'prior-session',
             '-',
         ], $factory->command);
         self::assertSame(['019abc-session'], $started);
         self::assertSame('019abc-session', $result->sessionId());
+    }
+
+    public function testItCanPinADifferentParentModelAndReasoningEffort(): void
+    {
+        $factory = new TraceableProcessFactory();
+        $runner = new CodexCliRunner($factory, 'gpt-5.6-sol', 'high');
+
+        $runner->run(new AgentRunnerInput(
+            'Handle the difficult task.',
+            $this->workingDirectory,
+            $this->artifactsDirectory,
+            [],
+            300,
+            'codex-full-access',
+        ));
+
+        self::assertContains('gpt-5.6-sol', $factory->command);
+        self::assertContains('model_reasoning_effort="high"', $factory->command);
     }
 
     public function testItExtractsAWaitDirectiveWithoutShowingItToMattermost(): void

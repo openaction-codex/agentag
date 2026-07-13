@@ -39,6 +39,8 @@ AGENTAG_TAG=@Codex
 AGENTAG_WORKSPACE_PATH=/srv/agentag/workspace
 AGENTAG_CONTEXT_MAX_CHARS=12000
 AGENTAG_RUN_TIMEOUT_SECONDS=1200
+AGENTAG_TASK_MODEL=gpt-5.6-luna
+AGENTAG_TASK_REASONING_EFFORT=xhigh
 AGENTAG_REDACTION_PATTERNS=
 
 AGENTAG_ACK_MODEL=gpt-5.6-luna
@@ -60,6 +62,8 @@ MATTERMOST_RECENT_REPLY_LIMIT=20
 
 The cheap acknowledgement call uses Codex with `--ephemeral`, `gpt-5.6-luna`, and low reasoning. If it times out or fails, AgentTag posts a deterministic acknowledgement and still queues the main task.
 
+The main task runner explicitly pins `AGENTAG_TASK_MODEL` and `AGENTAG_TASK_REASONING_EFFORT`; it does not rely on root’s interactive Codex defaults. Project-scoped custom agents can be defined under `.codex/agents/` in the workspace template. Applicable `AGENTS.md` instructions may delegate bounded specialist work to them; for example, a `sol` agent can override the parent with `gpt-5.6-sol` and high reasoning while the primary agent remains on Luna with xhigh reasoning.
+
 ## Workspace layout
 
 `AGENTAG_WORKSPACE_PATH` is a template. AgentTag copies it once per Mattermost thread and deliberately excludes `.git`.
@@ -69,6 +73,7 @@ The cheap acknowledgement call uses Codex with `--ephemeral`, `gpt-5.6-luna`, an
   app/                         # this checkout
   workspace/                   # operator-managed template
     AGENTS.md
+    .codex/agents/              # optional project-scoped delegated agents
     skills/
     .codex-plugin/
     docs/
