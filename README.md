@@ -9,7 +9,7 @@ AgentTag is a self-hosted Symfony bot that delegates Mattermost threads to Codex
 - Creates one Mattermost task card and updates it instead of streaming commands or harness events.
 - Renders the entire evolving task card as one blockquote so the separately posted answer is visually distinct.
 - Shows one Stop button while work is active, keeps the completed step timeline, then posts the answer after it.
-- Mirrors concrete Sol/Terra milestone notes into the task card as compact done/doing/next summaries while suppressing generic waiting updates.
+- Mirrors each concrete Sol/Terra current activity into the task card as one plain line while suppressing labels, prefixes, completed/next details, and generic waiting updates.
 - Treats new messages during a task as steering for the same Codex session.
 - Persists Codex session UUIDs and resumes them after steering, scheduled wakeups, retries, or worker restarts.
 - Supports waiting for CI, reviews, schedules, and other external state through durable Messenger wakeups.
@@ -66,7 +66,7 @@ The acknowledgement call uses Codex with `--ephemeral`, `gpt-5.6-luna`, and max 
 
 The main task runner explicitly pins `AGENTAG_TASK_MODEL` and `AGENTAG_TASK_REASONING_EFFORT`; it does not rely on root’s interactive Codex defaults. The default parent is GPT-5.6 Luna with max reasoning. The task card shows the selected model, reasoning effort, delegation role, and routing rationale before execution. Project-scoped custom agents under `.codex/agents/` provide Terra/max and Sol/xhigh specialist routes while the Luna parent remains responsible for coordination and the final answer.
 
-When Codex reports a successful `spawn_agent` call, AgentTag records the child thread ID and inspects that child session's CLI metadata. The card shows a verified agent/model/reasoning line only when the actual role, model, and effort match the selected route; unavailable metadata or a mismatch is shown explicitly instead of being presented as verified. While the child runs, AgentTag tails only its user-facing milestone messages from the child rollout and mirrors them as `Sol —` or `Terra —` card stages. Workspace agent instructions keep those updates short, factual, and structured around what is done, currently happening, and next.
+When Codex reports a successful `spawn_agent` call, AgentTag records the child thread ID and inspects that child session's CLI metadata. The card shows a verified agent/model/reasoning line only when the actual role, model, and effort match the selected route; unavailable metadata or a mismatch is shown explicitly instead of being presented as verified. While the child runs, AgentTag tails its structured current-activity messages, strips the private `Doing:` marker, and mirrors only the activity text as a plain card stage.
 
 ## Workspace layout
 

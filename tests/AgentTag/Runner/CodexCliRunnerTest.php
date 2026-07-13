@@ -250,7 +250,7 @@ JSON;
 
 JSON;
         $inspector = new TraceableSubagentSessionInspector();
-        $inspector->messages = ['Done: issue reproduced · Doing: patching · Next: run tests'];
+        $inspector->messages = ['Doing: patching the reproduced issue'];
         $sink = new TraceableAgentRunnerProgressSink();
         $runner = new CodexCliRunner($factory, subagentSessionInspector: $inspector);
 
@@ -266,7 +266,7 @@ JSON;
 
         self::assertCount(2, $sink->progress);
         self::assertSame('subagent_progress', $sink->progress[1]->type());
-        self::assertSame('Done: issue reproduced · Doing: patching · Next: run tests', $sink->progress[1]->message());
+        self::assertSame('Doing: patching the reproduced issue', $sink->progress[1]->message());
         self::assertSame(['thread_id' => '019f5b58-902e-7132-9185-049c23e5cc7b'], $sink->progress[1]->context());
     }
 

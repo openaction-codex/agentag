@@ -66,7 +66,7 @@ final class MattermostRunProgressSinkTest extends TestCase
         self::assertTrue($run->subagentMetadataVerified());
     }
 
-    public function testItShowsConcreteSubagentMilestonesAsACompactCardStage(): void
+    public function testItShowsOnlyTheSubagentCurrentActivityWithoutALabelOrPrefix(): void
     {
         $notifier = new ProgressTraceableMattermostNotifier();
         $run = $this->task(TaskModelSelection::fromRoute('sol-xhigh', 'Advanced cross-system implementation.'));
@@ -80,8 +80,24 @@ final class MattermostRunProgressSinkTest extends TestCase
         ));
 
         self::assertCount(1, $notifier->updatedPosts);
-        self::assertStringContainsString('> → Sol — Done: issue reproduced. Doing: patching the handler. Next: run focused tests.', $notifier->updatedPosts[0]);
-        self::assertSame('Sol — Done: issue reproduced. Doing: patching the handler. Next: run focused tests.', $run->currentStage());
+        self::assertStringContainsString('> → patching the handler.', $notifier->updatedPosts[0]);
+        self::assertStringNotContainsString('Done:', $notifier->updatedPosts[0]);
+        self::assertStringNotContainsString('Doing:', $notifier->updatedPosts[0]);
+        self::assertStringNotContainsString('Next:', $notifier->updatedPosts[0]);
+        self::assertStringNotContainsString('Sol —', $notifier->updatedPosts[0]);
+        self::assertSame('patching the handler.', $run->currentStage());
+    }
+
+    public function testItDoesNotDisplayUnstructuredSubagentMessages(): void
+    {
+        $notifier = new ProgressTraceableMattermostNotifier();
+        $run = $this->task(TaskModelSelection::fromRoute('sol-xhigh', 'Advanced cross-system implementation.'));
+        $sink = $this->sink($notifier, $run);
+
+        $sink->onProgress(new AgentRunnerProgress('subagent_progress', 'Finished the patch and tests are next.'));
+
+        self::assertSame([], $notifier->updatedPosts);
+        self::assertSame('Workspace ready', $run->currentStage());
     }
 
     public function testFinishKeepsTheStepsAndPostsTheAnswerAfterTheCardOnlyOnce(): void

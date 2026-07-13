@@ -158,17 +158,12 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
 
     private function subagentStage(string $message): string
     {
-        $message = trim(preg_replace('/\s+/', ' ', $message) ?? $message);
-        if ('' === $message) {
+        if (1 !== preg_match('/\bDoing:\s*(.+?)(?=\s*(?:·\s*)?(?:Done|Next):|$)/isu', $message, $matches)) {
             return '';
         }
 
-        $agent = match ($this->run->subagentAgent()) {
-            'sol-xhigh' => 'Sol',
-            'terra-max' => 'Terra',
-            default => 'Specialist',
-        };
+        $activity = trim(preg_replace('/\s+/', ' ', $matches[1]) ?? $matches[1]);
 
-        return substr($agent.' — '.$message, 0, 240);
+        return substr($activity, 0, 240);
     }
 }
