@@ -46,13 +46,13 @@ rm /tmp/composer-setup.php
 composer --version
 ```
 
-Install Node.js and Codex for root:
+Install Node.js and Codex system-wide for the root workers. The explicit prefix matters on hosts where root also has NVM: systemd uses `/usr/bin/codex`, not root's interactive NVM binary.
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt-get install -y nodejs
-npm install -g @openai/codex
-codex --version
+/usr/bin/npm install -g --prefix /usr @openai/codex
+env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin codex --version
 ```
 
 Authenticate Codex as root. Use the authentication method you normally use for the Codex CLI:
