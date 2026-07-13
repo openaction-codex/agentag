@@ -128,6 +128,7 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         self::assertSame('sol-xhigh', $run->modelSelection()->route);
         self::assertSame('task-post', $run->taskPostId());
         self::assertCount(1, $notifier->createdMessages);
+        self::assertStringStartsWith('> ', $notifier->createdMessages[0]);
         self::assertStringContainsString('Workspace ready. I’m reproducing billing failures.', $notifier->createdMessages[0]);
         self::assertStringContainsString('Model: **GPT-5.6 Sol · xhigh** via `sol-xhigh`', $notifier->createdMessages[0]);
         self::assertStringContainsString('Contained feature with several interacting changes.', $notifier->createdMessages[0]);

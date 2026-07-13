@@ -8,6 +8,7 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         private ProcessFactory $processFactory,
         private string $model = 'gpt-5.6-luna',
         private string $reasoningEffort = 'max',
+        private ?SubagentSessionInspector $subagentSessionInspector = null,
     ) {
         if ('' === trim($this->model)) {
             throw new \InvalidArgumentException('Codex task model must not be blank.');
@@ -59,14 +60,17 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         $parser = new CodexJsonEventParser();
         $interrupted = false;
         $reportedSessionId = $input->resumeSessionId();
-        $callback = function (string $type, string $buffer) use ($input, $parser, &$reportedSessionId): void {
+        /** @var array<string, true> $pendingSubagentThreadIds */
+        $pendingSubagentThreadIds = [];
+        $callback = function (string $type, string $buffer) use ($input, $parser, &$reportedSessionId, &$pendingSubagentThreadIds): void {
             if ('out' !== $type && !str_ends_with($type, 'OUT')) {
                 return;
             }
 
             foreach ($parser->consume($buffer) as $progress) {
-                $input->progressSink()?->onProgress($progress);
+                $this->deliverProgress($progress, $input, $pendingSubagentThreadIds);
             }
+            $this->verifyPendingSubagents($input, $pendingSubagentThreadIds);
             if (null !== $parser->threadId() && $parser->threadId() !== $reportedSessionId) {
                 $reportedSessionId = $parser->threadId();
                 $input->sessionStarted($reportedSessionId);
@@ -77,6 +81,7 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         $process->start($callback);
         while ($process->isRunning()) {
             $input->progressSink()?->onHeartbeat();
+            $this->verifyPendingSubagents($input, $pendingSubagentThreadIds);
             if ($input->interruptionRequested()) {
                 $interrupted = true;
                 $process->stop(5.0);
@@ -88,8 +93,9 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         $process->wait($callback);
 
         foreach ($parser->flush() as $progress) {
-            $input->progressSink()?->onProgress($progress);
+            $this->deliverProgress($progress, $input, $pendingSubagentThreadIds);
         }
+        $this->verifyPendingSubagents($input, $pendingSubagentThreadIds);
 
         $stdout = $process->output();
         $stderr = $process->errorOutput();
@@ -119,6 +125,87 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
             $parser->threadId() ?? $input->resumeSessionId(),
             $parsed['continuation'],
         );
+    }
+
+    /** @param array<string, true> $pendingSubagentThreadIds */
+    private function deliverProgress(AgentRunnerProgress $progress, AgentRunnerInput $input, array &$pendingSubagentThreadIds): void
+    {
+        $progress = $this->enrichSubagentProgress($progress, $input);
+        if ('subagent_started' === $progress->type()) {
+            $threadId = $progress->context()['thread_id'] ?? null;
+            if (is_string($threadId)) {
+                if (true === ($progress->context()['verified'] ?? false)) {
+                    unset($pendingSubagentThreadIds[$threadId]);
+                } else {
+                    $pendingSubagentThreadIds[$threadId] = true;
+                }
+            }
+        }
+        $input->progressSink()?->onProgress($progress);
+    }
+
+    /** @param array<string, true> $pendingSubagentThreadIds */
+    private function verifyPendingSubagents(AgentRunnerInput $input, array &$pendingSubagentThreadIds): void
+    {
+        if (null === $this->subagentSessionInspector || null === $input->progressSink()) {
+            return;
+        }
+
+        foreach (array_keys($pendingSubagentThreadIds) as $threadId) {
+            $metadata = $this->subagentSessionInspector->inspect($threadId, $this->codexHome($input));
+            if (null === $metadata) {
+                continue;
+            }
+
+            $input->progressSink()->onProgress(new AgentRunnerProgress('subagent_started', 'Codex verified the subagent session.', [
+                'thread_id' => $metadata->threadId,
+                'agent' => $metadata->agent,
+                'model' => $metadata->model,
+                'reasoning_effort' => $metadata->reasoningEffort,
+                'verified' => true,
+            ]));
+            unset($pendingSubagentThreadIds[$threadId]);
+        }
+    }
+
+    private function enrichSubagentProgress(AgentRunnerProgress $progress, AgentRunnerInput $input): AgentRunnerProgress
+    {
+        if ('subagent_started' !== $progress->type()) {
+            return $progress;
+        }
+
+        $threadId = $progress->context()['thread_id'] ?? null;
+        if (!is_string($threadId) || null === $this->subagentSessionInspector) {
+            return $progress;
+        }
+
+        $metadata = $this->subagentSessionInspector->inspect($threadId, $this->codexHome($input));
+        if (null === $metadata) {
+            return new AgentRunnerProgress($progress->type(), $progress->message(), [
+                'thread_id' => $threadId,
+                'verified' => false,
+            ]);
+        }
+
+        return new AgentRunnerProgress($progress->type(), $progress->message(), [
+            'thread_id' => $metadata->threadId,
+            'agent' => $metadata->agent,
+            'model' => $metadata->model,
+            'reasoning_effort' => $metadata->reasoningEffort,
+            'verified' => true,
+        ]);
+    }
+
+    private function codexHome(AgentRunnerInput $input): string
+    {
+        $codexHome = $input->environment()['CODEX_HOME'] ?? getenv('CODEX_HOME');
+        if (is_string($codexHome) && '' !== trim($codexHome)) {
+            return rtrim($codexHome, '/');
+        }
+
+        $home = getenv('HOME');
+
+        return is_string($home) && '' !== trim($home) ? rtrim($home, '/').'/.codex' : '.codex';
     }
 
     private function finalMessage(string $lastMessagePath, string $stdout, int $exitCode, CodexJsonEventParser $parser): string

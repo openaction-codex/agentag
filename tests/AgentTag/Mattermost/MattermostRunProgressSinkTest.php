@@ -7,6 +7,7 @@ use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostRunProgressSink;
 use App\AgentTag\Mattermost\TaskCardRenderer;
 use App\AgentTag\Runner\AgentRunnerProgress;
+use App\AgentTag\Runner\TaskModelSelection;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use Doctrine\ORM\EntityManagerInterface;
@@ -28,6 +29,9 @@ final class MattermostRunProgressSinkTest extends TestCase
         $sink->onProgress(new AgentRunnerProgress('agent_message', 'Reproduced three billing test failures. I am tracing rounding now.'));
 
         self::assertCount(1, $notifier->updatedPosts);
+        foreach (explode("\n", $notifier->updatedPosts[0]) as $line) {
+            self::assertStringStartsWith('> ', $line);
+        }
         self::assertStringContainsString('Reproduced three billing test failures.', $notifier->updatedPosts[0]);
         self::assertStringContainsString('Model: **GPT-5.6 Luna · max** in the main agent', $notifier->updatedPosts[0]);
         self::assertStringNotContainsString('phpunit output', $notifier->updatedPosts[0]);
@@ -39,6 +43,27 @@ final class MattermostRunProgressSinkTest extends TestCase
         self::assertIsArray($actions);
         self::assertSame(['Stop'], array_column($actions, 'name'));
         self::assertSame([], $notifier->threadMessages);
+    }
+
+    public function testItKeepsVerifiedSubagentMetadataVisibleInTheQuotedCard(): void
+    {
+        $notifier = new ProgressTraceableMattermostNotifier();
+        $run = $this->task(TaskModelSelection::fromRoute('sol-xhigh', 'Advanced cross-system implementation.'));
+        $sink = $this->sink($notifier, $run);
+
+        $sink->onProgress(new AgentRunnerProgress('subagent_started', 'Codex started a subagent thread.', [
+            'thread_id' => '019f5b58-902e-7132-9185-049c23e5cc7b',
+            'agent' => 'sol-xhigh',
+            'model' => 'gpt-5.6-sol',
+            'reasoning_effort' => 'xhigh',
+            'verified' => true,
+        ]));
+
+        self::assertCount(1, $notifier->updatedPosts);
+        self::assertStringContainsString('> Agent: ✓ Verified **GPT-5.6 Sol · xhigh** via `sol-xhigh` started', $notifier->updatedPosts[0]);
+        self::assertStringContainsString('`019f5b58-902e-7132-9185-049c23e5cc7b`', $notifier->updatedPosts[0]);
+        self::assertSame('sol-xhigh', $run->subagentAgent());
+        self::assertTrue($run->subagentMetadataVerified());
     }
 
     public function testFinishKeepsTheStepsAndPostsTheAnswerAfterTheCardOnlyOnce(): void
@@ -59,6 +84,7 @@ final class MattermostRunProgressSinkTest extends TestCase
         self::assertStringNotContainsString('428 tests passed', $notifier->updatedPosts[0]);
         self::assertSame([], $notifier->updatedProps[0]['attachments']);
         self::assertSame(["Cause\nRounding order.\n\nVerification\n• 428 tests passed"], $notifier->createdMessages);
+        self::assertFalse(str_starts_with($notifier->createdMessages[0], '> '));
         self::assertSame('answer-post', $run->answerPostId());
     }
 
@@ -74,11 +100,11 @@ final class MattermostRunProgressSinkTest extends TestCase
         );
     }
 
-    private function task(): AgentRun
+    private function task(?TaskModelSelection $selection = null): AgentRun
     {
         $run = new AgentRun(new ChatSession('mattermost:t:c:p', 't', 'c', 'p', new \DateTimeImmutable()), AgentRun::STATUS_RUNNING, new \DateTimeImmutable(), requesterId: 'user', workspacePath: '/tmp/workspace');
         (new \ReflectionProperty(AgentRun::class, 'id'))->setValue($run, 4);
-        $run->initializeTask('Fix billing tests', 'Workspace ready', 'thomas', new \DateTimeImmutable('+1 day'), 2, 60, 'milestones');
+        $run->initializeTask('Fix billing tests', 'Workspace ready', 'thomas', new \DateTimeImmutable('+1 day'), 2, 60, 'milestones', $selection);
         $run->assignTaskPost('task-post');
 
         return $run;

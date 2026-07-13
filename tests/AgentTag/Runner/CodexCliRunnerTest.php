@@ -3,9 +3,13 @@
 namespace App\Tests\AgentTag\Runner;
 
 use App\AgentTag\Runner\AgentRunnerInput;
+use App\AgentTag\Runner\AgentRunnerProgress;
+use App\AgentTag\Runner\AgentRunnerProgressSink;
 use App\AgentTag\Runner\CodexCliRunner;
 use App\AgentTag\Runner\ProcessFactory;
 use App\AgentTag\Runner\RunnerProcess;
+use App\AgentTag\Runner\SubagentSessionInspector;
+use App\AgentTag\Runner\SubagentSessionMetadata;
 use PHPUnit\Framework\TestCase;
 
 final class CodexCliRunnerTest extends TestCase
@@ -204,6 +208,39 @@ final class CodexCliRunnerTest extends TestCase
         self::assertContains('model_reasoning_effort="high"', $factory->command);
     }
 
+    public function testItReportsVerifiedMetadataWhenCodexStartsASubagent(): void
+    {
+        $factory = new TraceableProcessFactory();
+        $factory->callbackOutput = <<<'JSON'
+{"type":"item.completed","item":{"id":"item_2","type":"collab_tool_call","tool":"spawn_agent","sender_thread_id":"parent","receiver_thread_ids":["019f5b58-902e-7132-9185-049c23e5cc7b"],"prompt":"Implement it","agents_states":{},"status":"completed"}}
+
+JSON;
+        $inspector = new TraceableSubagentSessionInspector();
+        $sink = new TraceableAgentRunnerProgressSink();
+        $runner = new CodexCliRunner($factory, subagentSessionInspector: $inspector);
+
+        $runner->run(new AgentRunnerInput(
+            'Implement the advanced task.',
+            $this->workingDirectory,
+            $this->artifactsDirectory,
+            ['CODEX_HOME' => '/tmp/codex-home'],
+            300,
+            'codex-full-access',
+            progressSink: $sink,
+        ));
+
+        self::assertSame('/tmp/codex-home', $inspector->codexHome);
+        self::assertCount(1, $sink->progress);
+        self::assertSame('subagent_started', $sink->progress[0]->type());
+        self::assertSame([
+            'thread_id' => '019f5b58-902e-7132-9185-049c23e5cc7b',
+            'agent' => 'sol-xhigh',
+            'model' => 'gpt-5.6-sol',
+            'reasoning_effort' => 'xhigh',
+            'verified' => true,
+        ], $sink->progress[0]->context());
+    }
+
     public function testItExtractsAWaitDirectiveWithoutShowingItToMattermost(): void
     {
         $factory = new TraceableProcessFactory();
@@ -222,6 +259,36 @@ final class CodexCliRunnerTest extends TestCase
         self::assertNotNull($result->continuation());
         self::assertSame(300, $result->continuation()->delaySeconds());
         self::assertSame('Waiting for CI', $result->continuation()->reason());
+    }
+}
+
+final class TraceableSubagentSessionInspector implements SubagentSessionInspector
+{
+    public ?string $codexHome = null;
+
+    #[\Override]
+    public function inspect(string $threadId, string $codexHome): SubagentSessionMetadata
+    {
+        $this->codexHome = $codexHome;
+
+        return new SubagentSessionMetadata($threadId, 'sol-xhigh', 'gpt-5.6-sol', 'xhigh');
+    }
+}
+
+final class TraceableAgentRunnerProgressSink implements AgentRunnerProgressSink
+{
+    /** @var list<AgentRunnerProgress> */
+    public array $progress = [];
+
+    #[\Override]
+    public function onProgress(AgentRunnerProgress $progress): void
+    {
+        $this->progress[] = $progress;
+    }
+
+    #[\Override]
+    public function onHeartbeat(): void
+    {
     }
 }
 

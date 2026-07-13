@@ -23,7 +23,7 @@ final readonly class TaskCardRenderer
             default => $this->active($run, '🟡', $run->currentStage() ?? 'Working'),
         };
 
-        return new TaskCard($this->truncate($message), $this->actionProps($run));
+        return new TaskCard($this->truncate($this->blockquote($message)), $this->actionProps($run));
     }
 
     private function active(AgentRun $run, string $icon, string $currentStage): string
@@ -32,8 +32,11 @@ final readonly class TaskCardRenderer
             sprintf('%s **%s**', $icon, $run->title()),
             sprintf('Requested by %s · started %s', $this->requester($run), $this->relativeStart($run)),
             $this->modelLine($run),
-            '',
         ];
+        if (null !== $subagentLine = $this->subagentLine($run)) {
+            $lines[] = $subagentLine;
+        }
+        $lines[] = '';
 
         foreach (array_slice($run->completedStages(), -5) as $stage) {
             $lines[] = '✓ '.$stage;
@@ -75,8 +78,11 @@ final readonly class TaskCardRenderer
             sprintf('%s **%s**', $icon, $run->title()),
             sprintf('Requested by %s · %s', $this->requester($run), $timing),
             $this->modelLine($run),
-            '',
         ];
+        if (null !== $subagentLine = $this->subagentLine($run)) {
+            $lines[] = $subagentLine;
+        }
+        $lines[] = '';
 
         foreach (array_slice($run->completedStages(), -6) as $stage) {
             $lines[] = '✓ '.$stage;
@@ -96,6 +102,43 @@ final readonly class TaskCardRenderer
         $delegation = $selection->usesSubagent() ? sprintf(' via `%s`', $selection->agent) : ' in the main agent';
 
         return sprintf('Model: **%s · %s**%s — %s', $selection->displayModel, $selection->effort, $delegation, $selection->reason);
+    }
+
+    private function subagentLine(AgentRun $run): ?string
+    {
+        $threadId = $run->subagentThreadId();
+        if (null === $threadId) {
+            return null;
+        }
+
+        $selection = $run->modelSelection();
+        $agent = $run->subagentAgent();
+        $model = $run->subagentModel();
+        $effort = $run->subagentReasoningEffort();
+        if ($run->subagentMetadataVerified() && null !== $agent && null !== $model && null !== $effort) {
+            if ($agent === $selection->agent && $model === $selection->model && $effort === $selection->effort) {
+                return sprintf('Agent: ✓ Verified **%s · %s** via `%s` started · thread `%s`', $this->displayModel($model), $effort, $agent, $threadId);
+            }
+
+            return sprintf('Agent: ⚠ Started **%s · %s** via `%s`, but the selected route was `%s` · thread `%s`', $this->displayModel($model), $effort, $agent, $selection->agent, $threadId);
+        }
+
+        return sprintf('Agent: ✓ Codex reported subagent thread `%s` started; exact profile metadata was unavailable.', $threadId);
+    }
+
+    private function displayModel(string $model): string
+    {
+        return match ($model) {
+            'gpt-5.6-luna' => 'GPT-5.6 Luna',
+            'gpt-5.6-terra' => 'GPT-5.6 Terra',
+            'gpt-5.6-sol' => 'GPT-5.6 Sol',
+            default => $model,
+        };
+    }
+
+    private function blockquote(string $message): string
+    {
+        return implode("\n", array_map(static fn (string $line): string => '> '.$line, explode("\n", $message)));
     }
 
     /** @return array<string, mixed> */

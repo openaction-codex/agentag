@@ -48,6 +48,21 @@ class AgentRun
     private ?string $modelSelectionReason = null;
 
     #[ORM\Column(length: 64, nullable: true)]
+    private ?string $subagentThreadId = null;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $subagentAgent = null;
+
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $subagentModel = null;
+
+    #[ORM\Column(length: 16, nullable: true)]
+    private ?string $subagentReasoningEffort = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?bool $subagentMetadataVerified = null;
+
+    #[ORM\Column(length: 64, nullable: true)]
     private ?string $taskPostId = null;
 
     #[ORM\Column(length: 64, nullable: true)]
@@ -288,6 +303,31 @@ class AgentRun
             ?? TaskModelSelection::mainLuna();
     }
 
+    public function subagentThreadId(): ?string
+    {
+        return $this->subagentThreadId;
+    }
+
+    public function subagentAgent(): ?string
+    {
+        return $this->subagentAgent;
+    }
+
+    public function subagentModel(): ?string
+    {
+        return $this->subagentModel;
+    }
+
+    public function subagentReasoningEffort(): ?string
+    {
+        return $this->subagentReasoningEffort;
+    }
+
+    public function subagentMetadataVerified(): bool
+    {
+        return true === $this->subagentMetadataVerified;
+    }
+
     public function taskPostId(): ?string
     {
         return $this->taskPostId;
@@ -410,6 +450,20 @@ class AgentRun
     public function assignAnswerPost(string $postId): void
     {
         $this->answerPostId = $postId;
+    }
+
+    public function recordSubagentStarted(
+        string $threadId,
+        ?string $agent,
+        ?string $model,
+        ?string $reasoningEffort,
+        bool $metadataVerified,
+    ): void {
+        $this->subagentThreadId = substr(trim($threadId), 0, 64);
+        $this->subagentAgent = null === $agent ? null : substr(trim($agent), 0, 64);
+        $this->subagentModel = null === $model ? null : substr(trim($model), 0, 64);
+        $this->subagentReasoningEffort = null === $reasoningEffort ? null : substr(trim($reasoningEffort), 0, 16);
+        $this->subagentMetadataVerified = $metadataVerified;
     }
 
     public function changeNotificationPreference(string $preference): void

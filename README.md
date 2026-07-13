@@ -7,6 +7,7 @@ AgentTag is a self-hosted Symfony bot that delegates Mattermost threads to Codex
 - Accepts `@Codex` requests from a Mattermost outgoing webhook.
 - Immediately uses GPT-5.6 Luna with max reasoning to write a short acknowledgement, task title, and model-routing decision in the user’s language.
 - Creates one Mattermost task card and updates it instead of streaming commands or harness events.
+- Renders the entire evolving task card as one blockquote so the separately posted answer is visually distinct.
 - Shows one Stop button while work is active, keeps the completed step timeline, then posts the answer after it.
 - Treats new messages during a task as steering for the same Codex session.
 - Persists Codex session UUIDs and resumes them after steering, scheduled wakeups, retries, or worker restarts.
@@ -63,6 +64,8 @@ MATTERMOST_RECENT_REPLY_LIMIT=20
 The acknowledgement call uses Codex with `--ephemeral`, `gpt-5.6-luna`, and max reasoning. It classifies the request into a persisted model route and writes a short rationale in the user's language. If it times out, fails, or returns an invalid route, AgentTag safely falls back to Luna with max reasoning and still queues the main task.
 
 The main task runner explicitly pins `AGENTAG_TASK_MODEL` and `AGENTAG_TASK_REASONING_EFFORT`; it does not rely on root’s interactive Codex defaults. The default parent is GPT-5.6 Luna with max reasoning. The task card shows the selected model, reasoning effort, delegation role, and routing rationale before execution. Project-scoped custom agents under `.codex/agents/` provide Terra/max and Sol/xhigh specialist routes while the Luna parent remains responsible for coordination and the final answer.
+
+When Codex reports a successful `spawn_agent` call, AgentTag records the child thread ID and inspects that child session's CLI metadata. The card shows a verified agent/model/reasoning line only when the actual role, model, and effort match the selected route; unavailable metadata or a mismatch is shown explicitly instead of being presented as verified.
 
 ## Workspace layout
 

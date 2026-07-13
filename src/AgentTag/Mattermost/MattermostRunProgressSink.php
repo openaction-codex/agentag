@@ -29,6 +29,11 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
     #[\Override]
     public function onProgress(AgentRunnerProgress $progress): void
     {
+        if ('subagent_started' === $progress->type()) {
+            $this->recordSubagentStarted($progress);
+
+            return;
+        }
         if ('agent_message' !== $progress->type()) {
             return;
         }
@@ -46,6 +51,38 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
         if (0 === $this->lastUpdatedAt || time() - $this->lastUpdatedAt >= $this->minimumIntervalSeconds) {
             $this->updateCard();
         }
+    }
+
+    private function recordSubagentStarted(AgentRunnerProgress $progress): void
+    {
+        $context = $progress->context();
+        $threadId = $context['thread_id'] ?? null;
+        if (!is_string($threadId) || '' === trim($threadId)) {
+            return;
+        }
+
+        $agent = $context['agent'] ?? null;
+        $model = $context['model'] ?? null;
+        $reasoningEffort = $context['reasoning_effort'] ?? null;
+        $verified = true === ($context['verified'] ?? false);
+        $this->run->recordSubagentStarted(
+            $threadId,
+            is_string($agent) ? $agent : null,
+            is_string($model) ? $model : null,
+            is_string($reasoningEffort) ? $reasoningEffort : null,
+            $verified,
+        );
+        $this->entityManager->flush();
+        $this->runEventRecorder?->record($this->run, RunEvent::TYPE_PROGRESS_UPDATE, 'Codex started a subagent thread.', [
+            'platform' => 'mattermost',
+            'progress_type' => $progress->type(),
+            'thread_id' => $threadId,
+            'agent' => $agent,
+            'model' => $model,
+            'reasoning_effort' => $reasoningEffort,
+            'metadata_verified' => $verified,
+        ]);
+        $this->updateCard();
     }
 
     #[\Override]

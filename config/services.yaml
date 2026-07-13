@@ -73,6 +73,9 @@ services:
     App\AgentTag\Runner\ProcessFactory:
         alias: App\AgentTag\Runner\SymfonyProcessFactory
 
+    App\AgentTag\Runner\SubagentSessionInspector:
+        alias: App\AgentTag\Runner\CodexSessionSubagentInspector
+
     App\AgentTag\Runner\CodexCliRunner:
         arguments:
             $model: '%env(string:AGENTAG_TASK_MODEL)%'
