@@ -66,6 +66,24 @@ final class MattermostRunProgressSinkTest extends TestCase
         self::assertTrue($run->subagentMetadataVerified());
     }
 
+    public function testItShowsConcreteSubagentMilestonesAsACompactCardStage(): void
+    {
+        $notifier = new ProgressTraceableMattermostNotifier();
+        $run = $this->task(TaskModelSelection::fromRoute('sol-xhigh', 'Advanced cross-system implementation.'));
+        $run->recordSubagentStarted('child-thread', 'sol-xhigh', 'gpt-5.6-sol', 'xhigh', true);
+        $sink = $this->sink($notifier, $run);
+
+        $sink->onProgress(new AgentRunnerProgress(
+            'subagent_progress',
+            "Done: issue reproduced.\nDoing: patching the handler. Next: run focused tests.",
+            ['thread_id' => 'child-thread'],
+        ));
+
+        self::assertCount(1, $notifier->updatedPosts);
+        self::assertStringContainsString('> → Sol — Done: issue reproduced. Doing: patching the handler. Next: run focused tests.', $notifier->updatedPosts[0]);
+        self::assertSame('Sol — Done: issue reproduced. Doing: patching the handler. Next: run focused tests.', $run->currentStage());
+    }
+
     public function testFinishKeepsTheStepsAndPostsTheAnswerAfterTheCardOnlyOnce(): void
     {
         $notifier = new ProgressTraceableMattermostNotifier();

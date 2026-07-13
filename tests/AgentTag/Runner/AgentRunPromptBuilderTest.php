@@ -31,6 +31,9 @@ final class AgentRunPromptBuilderTest extends TestCase
         self::assertStringContainsString('project-scoped `sol-xhigh` subagent', $prompt);
         self::assertStringContainsString('Before substantive task work, spawn exactly', $prompt);
         self::assertStringContainsString('without full-history inheritance', $prompt);
+        self::assertStringContainsString('Done: ... · Doing: ... · Next: ...', $prompt);
+        self::assertStringContainsString('never send timer-based or no-change updates', $prompt);
+        self::assertStringContainsString('wait silently between concrete milestone notes', $prompt);
         self::assertStringContainsString('Luna main agent remains responsible', $prompt);
     }
 

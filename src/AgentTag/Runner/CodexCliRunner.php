@@ -62,15 +62,19 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         $reportedSessionId = $input->resumeSessionId();
         /** @var array<string, true> $pendingSubagentThreadIds */
         $pendingSubagentThreadIds = [];
-        $callback = function (string $type, string $buffer) use ($input, $parser, &$reportedSessionId, &$pendingSubagentThreadIds): void {
+        /** @var array<string, int> $subagentProgressOffsets */
+        $subagentProgressOffsets = [];
+        $lastSubagentProgressPollAt = 0.0;
+        $callback = function (string $type, string $buffer) use ($input, $parser, &$reportedSessionId, &$pendingSubagentThreadIds, &$subagentProgressOffsets, &$lastSubagentProgressPollAt): void {
             if ('out' !== $type && !str_ends_with($type, 'OUT')) {
                 return;
             }
 
             foreach ($parser->consume($buffer) as $progress) {
-                $this->deliverProgress($progress, $input, $pendingSubagentThreadIds);
+                $this->deliverProgress($progress, $input, $pendingSubagentThreadIds, $subagentProgressOffsets);
             }
             $this->verifyPendingSubagents($input, $pendingSubagentThreadIds);
+            $this->publishSubagentProgress($input, $subagentProgressOffsets, $lastSubagentProgressPollAt);
             if (null !== $parser->threadId() && $parser->threadId() !== $reportedSessionId) {
                 $reportedSessionId = $parser->threadId();
                 $input->sessionStarted($reportedSessionId);
@@ -82,6 +86,7 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         while ($process->isRunning()) {
             $input->progressSink()?->onHeartbeat();
             $this->verifyPendingSubagents($input, $pendingSubagentThreadIds);
+            $this->publishSubagentProgress($input, $subagentProgressOffsets, $lastSubagentProgressPollAt);
             if ($input->interruptionRequested()) {
                 $interrupted = true;
                 $process->stop(5.0);
@@ -93,9 +98,10 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         $process->wait($callback);
 
         foreach ($parser->flush() as $progress) {
-            $this->deliverProgress($progress, $input, $pendingSubagentThreadIds);
+            $this->deliverProgress($progress, $input, $pendingSubagentThreadIds, $subagentProgressOffsets);
         }
         $this->verifyPendingSubagents($input, $pendingSubagentThreadIds);
+        $this->publishSubagentProgress($input, $subagentProgressOffsets, $lastSubagentProgressPollAt, true);
 
         $stdout = $process->output();
         $stderr = $process->errorOutput();
@@ -127,13 +133,17 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         );
     }
 
-    /** @param array<string, true> $pendingSubagentThreadIds */
-    private function deliverProgress(AgentRunnerProgress $progress, AgentRunnerInput $input, array &$pendingSubagentThreadIds): void
+    /**
+     * @param array<string, true> $pendingSubagentThreadIds
+     * @param array<string, int>  $subagentProgressOffsets
+     */
+    private function deliverProgress(AgentRunnerProgress $progress, AgentRunnerInput $input, array &$pendingSubagentThreadIds, array &$subagentProgressOffsets): void
     {
         $progress = $this->enrichSubagentProgress($progress, $input);
         if ('subagent_started' === $progress->type()) {
             $threadId = $progress->context()['thread_id'] ?? null;
             if (is_string($threadId)) {
+                $subagentProgressOffsets[$threadId] ??= 0;
                 if (true === ($progress->context()['verified'] ?? false)) {
                     unset($pendingSubagentThreadIds[$threadId]);
                 } else {
@@ -142,6 +152,30 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
             }
         }
         $input->progressSink()?->onProgress($progress);
+    }
+
+    /** @param array<string, int> $subagentProgressOffsets */
+    private function publishSubagentProgress(AgentRunnerInput $input, array &$subagentProgressOffsets, float &$lastPollAt, bool $force = false): void
+    {
+        if (null === $this->subagentSessionInspector || null === $input->progressSink() || [] === $subagentProgressOffsets) {
+            return;
+        }
+
+        $now = microtime(true);
+        if (!$force && 0.0 !== $lastPollAt && $now - $lastPollAt < 1.0) {
+            return;
+        }
+        $lastPollAt = $now;
+
+        foreach ($subagentProgressOffsets as $threadId => $offset) {
+            $progress = $this->subagentSessionInspector->progressSince($threadId, $this->codexHome($input), $offset);
+            $subagentProgressOffsets[$threadId] = $progress->nextOffset;
+            foreach ($progress->messages as $message) {
+                $input->progressSink()->onProgress(new AgentRunnerProgress('subagent_progress', $message, [
+                    'thread_id' => $threadId,
+                ]));
+            }
+        }
     }
 
     /** @param array<string, true> $pendingSubagentThreadIds */

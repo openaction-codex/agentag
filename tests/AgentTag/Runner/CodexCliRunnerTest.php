@@ -10,6 +10,7 @@ use App\AgentTag\Runner\ProcessFactory;
 use App\AgentTag\Runner\RunnerProcess;
 use App\AgentTag\Runner\SubagentSessionInspector;
 use App\AgentTag\Runner\SubagentSessionMetadata;
+use App\AgentTag\Runner\SubagentSessionProgress;
 use PHPUnit\Framework\TestCase;
 
 final class CodexCliRunnerTest extends TestCase
@@ -241,6 +242,34 @@ JSON;
         ], $sink->progress[0]->context());
     }
 
+    public function testItMirrorsSubagentMilestoneMessagesIntoRunnerProgress(): void
+    {
+        $factory = new TraceableProcessFactory();
+        $factory->callbackOutput = <<<'JSON'
+{"type":"item.completed","item":{"id":"item_2","type":"collab_tool_call","tool":"spawn_agent","sender_thread_id":"parent","receiver_thread_ids":["019f5b58-902e-7132-9185-049c23e5cc7b"],"prompt":"Implement it","agents_states":{},"status":"completed"}}
+
+JSON;
+        $inspector = new TraceableSubagentSessionInspector();
+        $inspector->messages = ['Done: issue reproduced · Doing: patching · Next: run tests'];
+        $sink = new TraceableAgentRunnerProgressSink();
+        $runner = new CodexCliRunner($factory, subagentSessionInspector: $inspector);
+
+        $runner->run(new AgentRunnerInput(
+            'Implement the advanced task.',
+            $this->workingDirectory,
+            $this->artifactsDirectory,
+            ['CODEX_HOME' => '/tmp/codex-home'],
+            300,
+            'codex-full-access',
+            progressSink: $sink,
+        ));
+
+        self::assertCount(2, $sink->progress);
+        self::assertSame('subagent_progress', $sink->progress[1]->type());
+        self::assertSame('Done: issue reproduced · Doing: patching · Next: run tests', $sink->progress[1]->message());
+        self::assertSame(['thread_id' => '019f5b58-902e-7132-9185-049c23e5cc7b'], $sink->progress[1]->context());
+    }
+
     public function testItExtractsAWaitDirectiveWithoutShowingItToMattermost(): void
     {
         $factory = new TraceableProcessFactory();
@@ -266,12 +295,24 @@ final class TraceableSubagentSessionInspector implements SubagentSessionInspecto
 {
     public ?string $codexHome = null;
 
+    /** @var list<string> */
+    public array $messages = [];
+
     #[\Override]
     public function inspect(string $threadId, string $codexHome): SubagentSessionMetadata
     {
         $this->codexHome = $codexHome;
 
         return new SubagentSessionMetadata($threadId, 'sol-xhigh', 'gpt-5.6-sol', 'xhigh');
+    }
+
+    #[\Override]
+    public function progressSince(string $threadId, string $codexHome, int $offset): SubagentSessionProgress
+    {
+        $messages = $this->messages;
+        $this->messages = [];
+
+        return new SubagentSessionProgress($offset + count($messages), $messages);
     }
 }
 

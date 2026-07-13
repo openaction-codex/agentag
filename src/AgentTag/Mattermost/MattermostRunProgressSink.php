@@ -34,10 +34,12 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
 
             return;
         }
-        if ('agent_message' !== $progress->type()) {
+        if (!in_array($progress->type(), ['agent_message', 'subagent_progress'], true)) {
             return;
         }
-        $stage = $this->stage($progress->message());
+        $stage = 'subagent_progress' === $progress->type()
+            ? $this->subagentStage($progress->message())
+            : $this->stage($progress->message());
         if ('' === $stage || $stage === $this->run->currentStage()) {
             return;
         }
@@ -152,5 +154,21 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
         $sentence = preg_split('/(?<=[.!?])\s+/', $message, 2)[0] ?? $message;
 
         return substr($sentence, 0, 240);
+    }
+
+    private function subagentStage(string $message): string
+    {
+        $message = trim(preg_replace('/\s+/', ' ', $message) ?? $message);
+        if ('' === $message) {
+            return '';
+        }
+
+        $agent = match ($this->run->subagentAgent()) {
+            'sol-xhigh' => 'Sol',
+            'terra-max' => 'Terra',
+            default => 'Specialist',
+        };
+
+        return substr($agent.' — '.$message, 0, 240);
     }
 }
