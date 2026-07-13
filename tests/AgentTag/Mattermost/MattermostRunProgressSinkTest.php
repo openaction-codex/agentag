@@ -7,7 +7,6 @@ use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostRunProgressSink;
 use App\AgentTag\Mattermost\TaskCardRenderer;
 use App\AgentTag\Runner\AgentRunnerProgress;
-use App\AgentTag\Runner\AgentRunnerResult;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
 use Doctrine\ORM\EntityManagerInterface;
@@ -31,21 +30,34 @@ final class MattermostRunProgressSinkTest extends TestCase
         self::assertCount(1, $notifier->updatedPosts);
         self::assertStringContainsString('Reproduced three billing test failures.', $notifier->updatedPosts[0]);
         self::assertStringNotContainsString('phpunit output', $notifier->updatedPosts[0]);
+        $attachments = $notifier->updatedProps[0]['attachments'] ?? null;
+        self::assertIsArray($attachments);
+        $attachment = $attachments[0] ?? null;
+        self::assertIsArray($attachment);
+        $actions = $attachment['actions'] ?? null;
+        self::assertIsArray($actions);
+        self::assertSame(['Stop'], array_column($actions, 'name'));
         self::assertSame([], $notifier->threadMessages);
     }
 
-    public function testFinishReplacesTheCardWithTheFinalResult(): void
+    public function testFinishKeepsTheStepsAndPostsTheAnswerAfterTheCardOnlyOnce(): void
     {
         $notifier = new ProgressTraceableMattermostNotifier();
         $run = $this->task();
         $run->recordRunnerResult(AgentRun::STATUS_COMPLETED, "Cause\nRounding order.\n\nVerification\n• 428 tests passed", '', '/tmp/workspace', [], 0, null);
         $sink = $this->sink($notifier, $run);
 
-        $sink->finish(new AgentRunnerResult(0, 'done', '', '', [], null));
+        $sink->finish();
+        $sink->finish();
 
-        self::assertCount(1, $notifier->updatedPosts);
+        self::assertCount(2, $notifier->updatedPosts);
         self::assertStringContainsString('✅ **Fix billing tests**', $notifier->updatedPosts[0]);
-        self::assertStringContainsString('428 tests passed', $notifier->updatedPosts[0]);
+        self::assertStringContainsString('✓ Workspace ready', $notifier->updatedPosts[0]);
+        self::assertStringContainsString('✓ Complete task and verify results', $notifier->updatedPosts[0]);
+        self::assertStringNotContainsString('428 tests passed', $notifier->updatedPosts[0]);
+        self::assertSame([], $notifier->updatedProps[0]['attachments']);
+        self::assertSame(["Cause\nRounding order.\n\nVerification\n• 428 tests passed"], $notifier->createdMessages);
+        self::assertSame('answer-post', $run->answerPostId());
     }
 
     private function sink(ProgressTraceableMattermostNotifier $notifier, AgentRun $run): MattermostRunProgressSink
@@ -85,6 +97,10 @@ final class ProgressTraceableMattermostNotifier implements MattermostNotifier
     public array $updatedPosts = [];
     /** @var list<string> */
     public array $threadMessages = [];
+    /** @var list<string> */
+    public array $createdMessages = [];
+    /** @var list<array<string, mixed>> */
+    public array $updatedProps = [];
 
     #[\Override]
     public function showTyping(MattermostInboundEvent $event): void
@@ -100,13 +116,16 @@ final class ProgressTraceableMattermostNotifier implements MattermostNotifier
     #[\Override]
     public function createPost(MattermostInboundEvent $event, string $message, array $props = []): string
     {
-        return 'created';
+        $this->createdMessages[] = $message;
+
+        return 'answer-post';
     }
 
     #[\Override]
     public function updatePost(string $postId, string $message, array $props = []): bool
     {
         $this->updatedPosts[] = $message;
+        $this->updatedProps[] = $props;
 
         return true;
     }

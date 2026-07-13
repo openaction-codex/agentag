@@ -45,65 +45,69 @@ final readonly class TaskCardRenderer
 
     private function completed(AgentRun $run): string
     {
-        return sprintf(
-            "✅ **%s** · %s\n\n%s",
-            $run->title(),
-            $this->duration($run),
-            trim($run->outputSummary() ?? 'Task completed.'),
-        );
+        return $this->finishedTimeline($run, '✅', 'completed in '.$this->duration($run), '✓ Complete task and verify results');
     }
 
     private function failed(AgentRun $run): string
     {
-        return sprintf(
-            "❌ **%s** · %s\n\n%s",
-            $run->title(),
-            $this->duration($run),
-            trim($run->outputSummary() ?? 'The task could not be completed.'),
-        );
+        return $this->finishedTimeline($run, '❌', 'failed after '.$this->duration($run), '✕ Task failed');
     }
 
     private function interrupted(AgentRun $run): string
     {
         if (AgentRun::WORKSPACE_CLEANUP_CLEANED === $run->workspaceCleanupState()) {
-            return sprintf("⏹️ **%s** · stopped after %s\n\nWorkspace discarded.", $run->title(), $this->duration($run));
+            return $this->finishedTimeline($run, '⏹️', 'stopped after '.$this->duration($run), '■ Stopped', 'Workspace discarded.');
         }
 
-        return sprintf(
-            "⏹️ **%s** · stopped after %s\n\nWorkspace preserved until %s.",
-            $run->title(),
-            $this->duration($run),
-            $run->retainedUntil()?->format('Y-m-d H:i \U\T\C') ?? 'the retention window expires',
+        return $this->finishedTimeline(
+            $run,
+            '⏹️',
+            'stopped after '.$this->duration($run),
+            '■ Stopped',
+            sprintf('Workspace preserved until %s.', $run->retainedUntil()?->format('Y-m-d H:i \U\T\C') ?? 'the retention window expires'),
         );
+    }
+
+    private function finishedTimeline(AgentRun $run, string $icon, string $timing, string $lastStep, ?string $note = null): string
+    {
+        $lines = [
+            sprintf('%s **%s**', $icon, $run->title()),
+            sprintf('Requested by %s · %s', $this->requester($run), $timing),
+            '',
+        ];
+
+        foreach (array_slice($run->completedStages(), -6) as $stage) {
+            $lines[] = '✓ '.$stage;
+        }
+        $lines[] = $lastStep;
+        if (null !== $note) {
+            $lines[] = '';
+            $lines[] = $note;
+        }
+
+        return implode("\n", $lines);
     }
 
     /** @return array<string, mixed> */
     private function actionProps(AgentRun $run): array
     {
-        $actions = match ($run->status()) {
-            AgentRun::STATUS_COMPLETED, AgentRun::STATUS_FAILED => ['retry' => 'Retry', 'details' => 'Show technical log'],
-            AgentRun::STATUS_INTERRUPTED => ['resume' => 'Resume', 'discard' => 'Discard workspace', 'details' => 'Show technical log'],
-            default => ['cancel' => 'Cancel', 'details' => 'Show technical log'],
-        };
-
-        $items = [];
-        foreach ($actions as $action => $label) {
-            $items[] = [
-                'id' => $action,
-                'name' => $label,
-                'style' => 'cancel' === $action || 'discard' === $action ? 'danger' : 'default',
-                'integration' => [
-                    'url' => $this->urlGenerator->generate('agentag_mattermost_action', [], UrlGeneratorInterface::ABSOLUTE_URL),
-                    'context' => [
-                        'action' => $action,
-                        'run_id' => $run->id(),
-                        'signature' => $this->signature((int) $run->id(), $action),
-                    ],
-                ],
-            ];
+        if (!$run->isActive() || ($run->interruptionRequested() && AgentRun::INTERRUPT_CANCEL === $run->interruptionKind())) {
+            return ['attachments' => []];
         }
 
-        return ['attachments' => [['actions' => $items]]];
+        return ['attachments' => [['actions' => [[
+            'id' => 'cancel',
+            'name' => 'Stop',
+            'style' => 'danger',
+            'integration' => [
+                'url' => $this->urlGenerator->generate('agentag_mattermost_action', [], UrlGeneratorInterface::ABSOLUTE_URL),
+                'context' => [
+                    'action' => 'cancel',
+                    'run_id' => $run->id(),
+                    'signature' => $this->signature((int) $run->id(), 'cancel'),
+                ],
+            ],
+        ]]]]];
     }
 
     public function signature(int $runId, string $action): string

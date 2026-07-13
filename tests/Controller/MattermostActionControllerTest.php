@@ -41,9 +41,47 @@ final class MattermostActionControllerTest extends WebTestCase
         $message = $update['message'] ?? null;
         self::assertIsString($message);
         self::assertStringContainsString('Stopping after the current command', $message);
+        $props = $update['props'] ?? null;
+        self::assertIsArray($props);
+        self::assertSame([], $props['attachments'] ?? null);
         $this->entityManager()->refresh($run);
         self::assertSame(AgentRun::STATUS_INTERRUPT_REQUESTED, $run->status());
         self::assertSame(AgentRun::INTERRUPT_CANCEL, $run->interruptionKind());
+    }
+
+    public function testStopImmediatelyFinishesATaskWaitingForAutomaticRetry(): void
+    {
+        $client = static::createClient();
+        $this->refreshDatabase();
+        $run = $this->persistRun(AgentRun::STATUS_ACCEPTED);
+        $run->updateStage('The stage failed and will be retried automatically.');
+        $this->entityManager()->flush();
+        $renderer = static::getContainer()->get(TaskCardRenderer::class);
+        self::assertInstanceOf(TaskCardRenderer::class, $renderer);
+
+        $client->jsonRequest('POST', '/integrations/mattermost/action', [
+            'user_id' => 'requester',
+            'context' => [
+                'run_id' => $run->id(),
+                'action' => 'cancel',
+                'signature' => $renderer->signature((int) $run->id(), 'cancel'),
+            ],
+        ]);
+
+        self::assertResponseIsSuccessful();
+        $payload = json_decode((string) $client->getResponse()->getContent(), true);
+        self::assertIsArray($payload);
+        $ephemeral = $payload['ephemeral_text'] ?? null;
+        self::assertIsString($ephemeral);
+        self::assertStringContainsString('Stopped the task', $ephemeral);
+        $update = $payload['update'] ?? null;
+        self::assertIsArray($update);
+        $message = $update['message'] ?? null;
+        self::assertIsString($message);
+        self::assertStringContainsString('■ Stopped', $message);
+        self::assertStringNotContainsString('→ Stopping after the current command', $message);
+        $this->entityManager()->refresh($run);
+        self::assertSame(AgentRun::STATUS_INTERRUPTED, $run->status());
     }
 
     public function testDetailsAreEphemeralAndSigned(): void

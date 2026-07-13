@@ -82,10 +82,11 @@ final class MattermostActionController extends AbstractController
         if (!$run->isActive()) {
             return null;
         }
-        $run->updateStage('Stopping after the current command');
         $run->requestCancellation();
 
-        return 'Stopping after the current command. The workspace will be preserved for 24 hours.';
+        return AgentRun::STATUS_INTERRUPTED === $run->status()
+            ? 'Stopped the task. The workspace will be preserved for 24 hours.'
+            : 'Stopping after the current command. The workspace will be preserved for 24 hours.';
     }
 
     private function retry(AgentRun $run, string $instruction, MessageBusInterface $messageBus): ?string

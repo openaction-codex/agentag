@@ -7,7 +7,7 @@ AgentTag is a self-hosted Symfony bot that delegates Mattermost threads to Codex
 - Accepts `@Codex` requests from a Mattermost outgoing webhook.
 - Immediately uses a cheap low-reasoning model to write a short acknowledgement and task title in the user’s language.
 - Creates one Mattermost task card and updates it instead of streaming commands or harness events.
-- Offers Cancel, Retry, Resume, Discard, and Show technical log buttons.
+- Shows one Stop button while work is active, keeps the completed step timeline, then posts the answer after it.
 - Treats new messages during a task as steering for the same Codex session.
 - Persists Codex session UUIDs and resumes them after steering, scheduled wakeups, retries, or worker restarts.
 - Supports waiting for CI, reviews, schedules, and other external state through durable Messenger wakeups.
@@ -99,7 +99,7 @@ Examples:
 @Codex retry from the test step
 ```
 
-While a task is running or waiting, a new mentioned message becomes steering for that same task rather than a replacement run. Stop preserves the workspace for 24 hours and exposes Resume and Discard buttons. Details returns the redacted technical log ephemerally; raw command events never appear in the status card.
+While a task is running or waiting, a new mentioned message becomes steering for that same task rather than a replacement run. Stop interrupts a running command or immediately stops a task queued for retry, and preserves the workspace for 24 hours. Retry and resume remain available as explicit chat commands. Raw command events never appear in the status card.
 
 Codex can keep a task alive by ending a stage with this private protocol (the comment is removed before display):
 

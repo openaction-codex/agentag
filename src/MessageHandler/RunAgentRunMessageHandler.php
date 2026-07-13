@@ -6,7 +6,6 @@ use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Mattermost\MattermostRunProgressSink;
 use App\AgentTag\Mattermost\MattermostRunProgressSinkFactory;
 use App\AgentTag\Run\AgentRunTurnGate;
-use App\AgentTag\Runner\AgentRunnerResult;
 use App\AgentTag\Runner\AgentRunOrchestrator;
 use App\AgentTag\Runner\AgentRunPromptBuilder;
 use App\Entity\AgentRun;
@@ -33,11 +32,16 @@ final readonly class RunAgentRunMessageHandler
     public function __invoke(RunAgentRunMessage $message): void
     {
         $run = $this->entityManager->getRepository(AgentRun::class)->find($message->runId());
-        if (!$run instanceof AgentRun || $run->isTerminal()) {
+        if (!$run instanceof AgentRun) {
             return;
         }
 
         $progressSink = $this->mattermostProgressSinkFactory->create($run);
+        if ($run->isTerminal()) {
+            $progressSink->finish();
+
+            return;
+        }
         if ($run->deadlineExceeded()) {
             $this->fail($run, 'Task deadline exceeded before the next stage could start.', $progressSink);
 
@@ -60,7 +64,7 @@ final readonly class RunAgentRunMessageHandler
         if ($run->interruptionRequested() && AgentRun::INTERRUPT_CANCEL === $run->interruptionKind()) {
             $run->markInterrupted('Task stopped before the next stage started.', $run->workspacePath());
             $this->entityManager->flush();
-            $progressSink->finish(new AgentRunnerResult(130, '', '', '', [], null));
+            $progressSink->finish();
 
             return;
         }
@@ -81,7 +85,7 @@ final readonly class RunAgentRunMessageHandler
 
         $steering = $run->takePendingSteering();
         $this->entityManager->flush();
-        $result = $this->orchestrator->run(
+        $this->orchestrator->run(
             $run,
             sprintf('run-%d', $message->runId()),
             $this->promptBuilder->build($run, $steering),
@@ -92,10 +96,8 @@ final readonly class RunAgentRunMessageHandler
         );
 
         $this->entityManager->refresh($run);
-        $progressSink->finish($result);
-        if (AgentRun::STATUS_INTERRUPTED === $run->status()) {
-            $progressSink->controlMessage('Stopped after the current command. The workspace is preserved for 24 hours; use Resume or Discard on the task card.');
-        } elseif (AgentRun::STATUS_WAITING === $run->status() && null !== $run->wakeAt()) {
+        $progressSink->finish();
+        if (AgentRun::STATUS_WAITING === $run->status() && null !== $run->wakeAt()) {
             $progressSink->milestone(sprintf('%s I’ll check again %s.', rtrim((string) $run->outputSummary()), $run->wakeAt()->format('Y-m-d H:i \U\T\C')));
             $this->schedule($run, max(1, $run->wakeAt()->getTimestamp() - time()));
         } elseif (AgentRun::STATUS_ACCEPTED === $run->status()) {
@@ -118,6 +120,6 @@ final readonly class RunAgentRunMessageHandler
     {
         $run->recordRunnerResult(AgentRun::STATUS_FAILED, $message, $message, $run->workspacePath() ?? '', [], 1, null);
         $this->entityManager->flush();
-        $progressSink->finish(new AgentRunnerResult(1, $message, '', $message, [], null));
+        $progressSink->finish();
     }
 }

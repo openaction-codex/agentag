@@ -43,6 +43,9 @@ class AgentRun
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $taskPostId = null;
 
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $answerPostId = null;
+
     #[ORM\Column(length: 120, nullable: true)]
     private ?string $requesterName = null;
 
@@ -277,6 +280,11 @@ class AgentRun
         return $this->taskPostId;
     }
 
+    public function answerPostId(): ?string
+    {
+        return $this->answerPostId;
+    }
+
     public function codexThreadId(): ?string
     {
         return $this->codexThreadId;
@@ -382,6 +390,11 @@ class AgentRun
         $this->taskPostId = $postId;
     }
 
+    public function assignAnswerPost(string $postId): void
+    {
+        $this->answerPostId = $postId;
+    }
+
     public function changeNotificationPreference(string $preference): void
     {
         if (in_array($preference, ['all', 'milestones', 'completion'], true)) {
@@ -422,6 +435,14 @@ class AgentRun
         if ($this->isTerminal()) {
             return;
         }
+
+        if (!in_array($this->status, [self::STATUS_RUNNING, self::STATUS_INTERRUPT_REQUESTED], true)) {
+            $this->markInterrupted('Task stopped before the next command started.', $this->workspacePath);
+
+            return;
+        }
+
+        $this->updateStage('Stopping after the current command');
         $this->interruptionKind = self::INTERRUPT_CANCEL;
         $this->status = self::STATUS_INTERRUPT_REQUESTED;
     }
@@ -453,6 +474,7 @@ class AgentRun
     {
         $this->pendingSteering = trim($instruction);
         $this->status = self::STATUS_ACCEPTED;
+        $this->answerPostId = null;
         $this->finishedAt = null;
         $this->exitCode = null;
         $this->interruptionKind = null;
@@ -511,6 +533,10 @@ class AgentRun
         $this->exitCode = 130;
         $this->finishedAt = new \DateTimeImmutable();
         $this->retainedUntil = $this->finishedAt->modify('+24 hours');
+        if (null !== $this->currentStage && !in_array($this->currentStage, $this->completedStages, true)) {
+            $this->completedStages[] = $this->currentStage;
+        }
+        $this->currentStage = null;
         if (null !== $workspacePath) {
             $this->workspacePath = $workspacePath;
         }

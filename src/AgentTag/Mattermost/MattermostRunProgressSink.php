@@ -5,7 +5,6 @@ namespace App\AgentTag\Mattermost;
 use App\AgentTag\Run\RunEventRecorder;
 use App\AgentTag\Runner\AgentRunnerProgress;
 use App\AgentTag\Runner\AgentRunnerProgressSink;
-use App\AgentTag\Runner\AgentRunnerResult;
 use App\Entity\AgentRun;
 use App\Entity\RunEvent;
 use Doctrine\ORM\EntityManagerInterface;
@@ -60,9 +59,10 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
         $this->lastTypingAt = $now;
     }
 
-    public function finish(AgentRunnerResult $result): void
+    public function finish(): void
     {
         $this->updateCard();
+        $this->publishAnswer();
     }
 
     public function milestone(string $message): void
@@ -70,11 +70,6 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
         if ('completion' !== $this->run->notificationPreference()) {
             $this->notifier->postProgress($this->event, $message);
         }
-    }
-
-    public function controlMessage(string $message): void
-    {
-        $this->notifier->postProgress($this->event, $message);
     }
 
     private function updateCard(): void
@@ -92,6 +87,26 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
             $this->notifier->updatePost($postId, $card->message, $card->props);
         }
         $this->lastUpdatedAt = time();
+    }
+
+    private function publishAnswer(): void
+    {
+        if (!in_array($this->run->status(), [AgentRun::STATUS_COMPLETED, AgentRun::STATUS_FAILED], true)
+            || null !== $this->run->answerPostId()) {
+            return;
+        }
+
+        $message = trim($this->run->outputSummary() ?? '');
+        if ('' === $message) {
+            $message = AgentRun::STATUS_COMPLETED === $this->run->status()
+                ? 'Task completed.'
+                : 'The task could not be completed.';
+        }
+        $postId = $this->notifier->createPost($this->event, $message);
+        if (null !== $postId) {
+            $this->run->assignAnswerPost($postId);
+            $this->entityManager->flush();
+        }
     }
 
     private function stage(string $message): string
