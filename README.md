@@ -62,7 +62,7 @@ MATTERMOST_RECENT_REPLY_LIMIT=20
 
 The cheap acknowledgement call uses Codex with `--ephemeral`, `gpt-5.6-luna`, and low reasoning. It also classifies the request into a persisted model route and writes a short rationale in the user's language. If it times out, fails, or returns an invalid route, AgentTag safely falls back to Luna with max reasoning and still queues the main task.
 
-The main task runner explicitly pins `AGENTAG_TASK_MODEL` and `AGENTAG_TASK_REASONING_EFFORT`; it does not rely on root’s interactive Codex defaults. The default parent is GPT-5.6 Luna with max reasoning. The task card shows the selected model, reasoning effort, delegation role, and routing rationale before execution. Project-scoped custom agents under `.codex/agents/` provide Terra/max and Sol/high, Sol/xhigh, or Sol/max specialist routes while the Luna parent remains responsible for coordination and the final answer.
+The main task runner explicitly pins `AGENTAG_TASK_MODEL` and `AGENTAG_TASK_REASONING_EFFORT`; it does not rely on root’s interactive Codex defaults. The default parent is GPT-5.6 Luna with max reasoning. The task card shows the selected model, reasoning effort, delegation role, and routing rationale before execution. Project-scoped custom agents under `.codex/agents/` provide Terra/max and Sol/xhigh specialist routes while the Luna parent remains responsible for coordination and the final answer.
 
 ## Workspace layout
 

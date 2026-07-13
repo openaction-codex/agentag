@@ -38,9 +38,7 @@ Return exactly one JSON object with string keys "title", "acknowledgement", "rou
 
 Routing policy:
 - luna-max: use the primary agent for implementation/product questions and simple coding work such as wording changes, simple refactors, known-cause bugs, straightforward specifications, implementations, or PR reviews.
-- sol-high: use the Sol subagent for medium coding work such as a contained feature or a bug whose cause is not yet known.
-- sol-xhigh: use the Sol subagent for advanced coding work such as larger refactors, architecture, cross-system features, difficult debugging, or long plans.
-- sol-max: use the Sol subagent only for the most complex, ambiguous, high-risk, or unusually broad coding and architecture work.
+- sol-xhigh: use the Sol subagent for medium or advanced coding work such as contained or cross-system features, unknown-cause bugs, difficult debugging, larger refactors, architecture, non-trivial reviews, or long plans. Also use it for non-coding work needing deeper judgment or consequential recommendations.
 - terra-max: use the Terra subagent for other non-coding tasks that materially benefit from fast, broad, read-heavy research, document processing, comparison, or synthesis.
 - Prefer luna-max when a request does not clearly need a subagent.
 

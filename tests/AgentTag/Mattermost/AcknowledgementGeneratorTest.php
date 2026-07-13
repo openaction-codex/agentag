@@ -12,21 +12,23 @@ final class AcknowledgementGeneratorTest extends TestCase
 {
     public function testItUsesTheCheapLowReasoningModelAndKeepsTheUsersLanguage(): void
     {
-        $factory = new AcknowledgementProcessFactory('{"title":"Corriger les tests de facturation","acknowledgement":"Espace prêt. Je reproduis les échecs de facturation.","route":"sol-high","selection_reason":"Bug de complexité moyenne dont la cause reste à identifier."}');
+        $factory = new AcknowledgementProcessFactory('{"title":"Corriger les tests de facturation","acknowledgement":"Espace prêt. Je reproduis les échecs de facturation.","route":"sol-xhigh","selection_reason":"Bug de complexité moyenne dont la cause reste à identifier."}');
         $generator = new AcknowledgementGenerator($factory, new AgentTagSettings('@Codex', '/tmp', acknowledgementModel: 'gpt-5.6-luna'));
 
         $presentation = $generator->generate('@Codex corrige les tests de facturation', '/tmp');
 
         self::assertSame('Corriger les tests de facturation', $presentation->title);
         self::assertSame('Espace prêt. Je reproduis les échecs de facturation.', $presentation->acknowledgement);
-        self::assertSame('sol-high', $presentation->modelSelection->route);
+        self::assertSame('sol-xhigh', $presentation->modelSelection->route);
         self::assertSame('gpt-5.6-sol', $presentation->modelSelection->model);
-        self::assertSame('high', $presentation->modelSelection->effort);
+        self::assertSame('xhigh', $presentation->modelSelection->effort);
         self::assertSame('Bug de complexité moyenne dont la cause reste à identifier.', $presentation->modelSelection->reason);
         self::assertContains('gpt-5.6-luna', $factory->command);
         self::assertContains('model_reasoning_effort="low"', $factory->command);
         self::assertContains('--ephemeral', $factory->command);
-        self::assertStringContainsString('sol-max', $factory->input);
+        self::assertStringContainsString('sol-xhigh', $factory->input);
+        self::assertStringNotContainsString('sol-high', $factory->input);
+        self::assertStringNotContainsString('sol-max', $factory->input);
         self::assertStringContainsString('terra-max', $factory->input);
     }
 

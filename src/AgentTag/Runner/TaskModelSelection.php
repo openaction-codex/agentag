@@ -8,9 +8,7 @@ final readonly class TaskModelSelection
     private const array ROUTES = [
         'luna-max' => ['agent' => 'main', 'model' => 'gpt-5.6-luna', 'effort' => 'max', 'display' => 'GPT-5.6 Luna'],
         'terra-max' => ['agent' => 'terra-max', 'model' => 'gpt-5.6-terra', 'effort' => 'max', 'display' => 'GPT-5.6 Terra'],
-        'sol-high' => ['agent' => 'sol-high', 'model' => 'gpt-5.6-sol', 'effort' => 'high', 'display' => 'GPT-5.6 Sol'],
         'sol-xhigh' => ['agent' => 'sol-xhigh', 'model' => 'gpt-5.6-sol', 'effort' => 'xhigh', 'display' => 'GPT-5.6 Sol'],
-        'sol-max' => ['agent' => 'sol-max', 'model' => 'gpt-5.6-sol', 'effort' => 'max', 'display' => 'GPT-5.6 Sol'],
     ];
 
     private function __construct(
