@@ -8,6 +8,7 @@ use App\AgentTag\Runner\AgentRunnerInput;
 use App\AgentTag\Runner\AgentRunnerInterface;
 use App\AgentTag\Runner\AgentRunnerResult;
 use App\AgentTag\Runner\AgentRunOrchestrator;
+use App\AgentTag\Runner\TaskModelSelection;
 use App\AgentTag\Runner\TokenUsage;
 use App\AgentTag\Security\SensitiveTextRedactor;
 use App\AgentTag\Workspace\WorkspaceLayout;
@@ -47,6 +48,11 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         $session = new ChatSession('mattermost:team:channel:root', 'team', 'channel', 'root', new \DateTimeImmutable());
         $sessionWorkspace = $this->workspaceDirectory.'/runs/session-root';
         $run = new AgentRun($session, 'accepted', new \DateTimeImmutable(), 'input', workspacePath: $sessionWorkspace);
+        $run->presentTask(
+            'Implement the change',
+            'Workspace ready',
+            TaskModelSelection::fromRoute('sol-xhigh', 'Coding task.'),
+        );
         $entityManager->persist($session);
         $entityManager->persist($run);
         $entityManager->flush();
@@ -89,6 +95,8 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         self::assertNotNull($fakeRunner->input);
         self::assertSame($sessionWorkspace, $fakeRunner->input->workingDirectory());
         self::assertSame($this->workspaceDirectory.'/artifacts/run-123', $fakeRunner->input->artifactsDirectory());
+        self::assertSame('gpt-5.6-sol', $fakeRunner->input->model());
+        self::assertSame('xhigh', $fakeRunner->input->reasoningEffort());
     }
 
     private function removeDirectory(string $path): void

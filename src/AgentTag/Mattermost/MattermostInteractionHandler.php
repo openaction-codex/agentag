@@ -100,7 +100,15 @@ final readonly class MattermostInteractionHandler
                 $this->settings->retryDelaySeconds(),
                 $this->notificationPreference($event->text()),
             );
+            $run->acknowledgeTask('Request received', 'Request received. Deciding which model to use.');
             $this->sessionStore->save($run);
+
+            $card = $this->taskCardRenderer->render($run);
+            $postId = $this->notifier->createPost($event, $card->message, $card->props);
+            if (null !== $postId) {
+                $run->assignTaskPost($postId);
+                $this->sessionStore->save($run);
+            }
         } catch (\InvalidArgumentException|\RuntimeException $exception) {
             $message = $exception->getMessage();
             $this->notifier->postProgress($event, $message);

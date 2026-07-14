@@ -26,8 +26,8 @@ services:
             $tag: '%env(string:AGENTAG_TAG)%'
             $workspacePath: '%env(resolve:AGENTAG_WORKSPACE_PATH)%'
             $runTimeoutSeconds: '%env(int:AGENTAG_RUN_TIMEOUT_SECONDS)%'
-            $acknowledgementModel: '%env(string:AGENTAG_ACK_MODEL)%'
-            $acknowledgementTimeoutSeconds: '%env(int:AGENTAG_ACK_TIMEOUT_SECONDS)%'
+            $modelSelectionModel: '%env(string:AGENTAG_MODEL_SELECTION_MODEL)%'
+            $modelSelectionTimeoutSeconds: '%env(int:AGENTAG_MODEL_SELECTION_TIMEOUT_SECONDS)%'
             $taskDeadlineSeconds: '%env(int:AGENTAG_TASK_DEADLINE_SECONDS)%'
             $maxRetries: '%env(int:AGENTAG_MAX_RETRIES)%'
             $retryDelaySeconds: '%env(int:AGENTAG_RETRY_DELAY_SECONDS)%'
@@ -52,8 +52,8 @@ services:
     App\AgentTag\Mattermost\MattermostNotifier:
         alias: App\AgentTag\Mattermost\MattermostApiNotifier
 
-    App\AgentTag\Mattermost\TaskPresentationGenerator:
-        alias: App\AgentTag\Mattermost\AcknowledgementGenerator
+    App\AgentTag\Runner\TaskModelSelector:
+        alias: App\AgentTag\Runner\CodexTaskModelSelector
 
     App\AgentTag\Chat\InboundEventIdempotencyStore:
         alias: App\AgentTag\Chat\DoctrineInboundEventIdempotencyStore
@@ -72,14 +72,6 @@ services:
 
     App\AgentTag\Runner\ProcessFactory:
         alias: App\AgentTag\Runner\SymfonyProcessFactory
-
-    App\AgentTag\Runner\SubagentSessionInspector:
-        alias: App\AgentTag\Runner\CodexSessionSubagentInspector
-
-    App\AgentTag\Runner\CodexCliRunner:
-        arguments:
-            $model: '%env(string:AGENTAG_TASK_MODEL)%'
-            $reasoningEffort: '%env(string:AGENTAG_TASK_REASONING_EFFORT)%'
 
     App\AgentTag\Runner\AgentRunnerInterface:
         alias: App\AgentTag\Runner\CodexCliRunner

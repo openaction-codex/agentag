@@ -5,7 +5,7 @@ namespace App\MessageHandler;
 use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostRunProgressSinkFactory;
 use App\AgentTag\Mattermost\TaskCardRenderer;
-use App\AgentTag\Mattermost\TaskPresentationGenerator;
+use App\AgentTag\Runner\TaskModelSelector;
 use App\Entity\AgentRun;
 use App\Message\PrepareAgentTaskMessage;
 use App\Message\RunAgentRunMessage;
@@ -18,7 +18,7 @@ final readonly class PrepareAgentTaskMessageHandler
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
-        private TaskPresentationGenerator $presentationGenerator,
+        private TaskModelSelector $modelSelector,
         private TaskCardRenderer $renderer,
         private MattermostNotifier $notifier,
         private MattermostRunProgressSinkFactory $progressSinkFactory,
@@ -35,6 +35,7 @@ final readonly class PrepareAgentTaskMessageHandler
         if ($run->interruptionRequested() && AgentRun::INTERRUPT_CANCEL === $run->interruptionKind()) {
             $run->markInterrupted('Task cancelled before workspace investigation started.', $run->workspacePath());
             $this->entityManager->flush();
+            $this->progressSinkFactory->create($run)->finish();
 
             return;
         }
@@ -46,13 +47,15 @@ final readonly class PrepareAgentTaskMessageHandler
             throw new \RuntimeException(sprintf('Task #%d has no workspace.', $message->runId()));
         }
 
-        $presentation = $this->presentationGenerator->generate($run->inputSummary() ?? 'Handle the Mattermost request.', $workspace);
-        $run->presentTask($presentation->title, $presentation->acknowledgement, $presentation->modelSelection);
-        $event = $this->progressSinkFactory->eventFor($run);
+        $run->selectModel($this->modelSelector->select($run->inputSummary() ?? 'Handle the Mattermost request.'));
         $card = $this->renderer->render($run);
-        $postId = $this->notifier->createPost($event, $card->message, $card->props);
-        if (null !== $postId) {
-            $run->assignTaskPost($postId);
+        if (null === $run->taskPostId()) {
+            $postId = $this->notifier->createPost($this->progressSinkFactory->eventFor($run), $card->message, $card->props);
+            if (null !== $postId) {
+                $run->assignTaskPost($postId);
+            }
+        } else {
+            $this->notifier->updatePost($run->taskPostId(), $card->message, $card->props);
         }
         $this->entityManager->flush();
         $this->messageBus->dispatch(new RunAgentRunMessage($message->runId()));

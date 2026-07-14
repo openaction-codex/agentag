@@ -29,17 +29,10 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
     #[\Override]
     public function onProgress(AgentRunnerProgress $progress): void
     {
-        if ('subagent_started' === $progress->type()) {
-            $this->recordSubagentStarted($progress);
-
+        if ('agent_message' !== $progress->type()) {
             return;
         }
-        if (!in_array($progress->type(), ['agent_message', 'subagent_progress'], true)) {
-            return;
-        }
-        $stage = 'subagent_progress' === $progress->type()
-            ? $this->subagentStage($progress->message())
-            : $this->stage($progress->message());
+        $stage = $this->stage($progress->message());
         if ('' === $stage || $stage === $this->run->currentStage()) {
             return;
         }
@@ -53,38 +46,6 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
         if (0 === $this->lastUpdatedAt || time() - $this->lastUpdatedAt >= $this->minimumIntervalSeconds) {
             $this->updateCard();
         }
-    }
-
-    private function recordSubagentStarted(AgentRunnerProgress $progress): void
-    {
-        $context = $progress->context();
-        $threadId = $context['thread_id'] ?? null;
-        if (!is_string($threadId) || '' === trim($threadId)) {
-            return;
-        }
-
-        $agent = $context['agent'] ?? null;
-        $model = $context['model'] ?? null;
-        $reasoningEffort = $context['reasoning_effort'] ?? null;
-        $verified = true === ($context['verified'] ?? false);
-        $this->run->recordSubagentStarted(
-            $threadId,
-            is_string($agent) ? $agent : null,
-            is_string($model) ? $model : null,
-            is_string($reasoningEffort) ? $reasoningEffort : null,
-            $verified,
-        );
-        $this->entityManager->flush();
-        $this->runEventRecorder?->record($this->run, RunEvent::TYPE_PROGRESS_UPDATE, 'Codex started a subagent thread.', [
-            'platform' => 'mattermost',
-            'progress_type' => $progress->type(),
-            'thread_id' => $threadId,
-            'agent' => $agent,
-            'model' => $model,
-            'reasoning_effort' => $reasoningEffort,
-            'metadata_verified' => $verified,
-        ]);
-        $this->updateCard();
     }
 
     #[\Override]
@@ -154,16 +115,5 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
         $sentence = preg_split('/(?<=[.!?])\s+/', $message, 2)[0] ?? $message;
 
         return substr($sentence, 0, 240);
-    }
-
-    private function subagentStage(string $message): string
-    {
-        if (1 !== preg_match('/\bDoing:\s*(.+?)(?=\s*(?:·\s*)?(?:Done|Next):|$)/isu', $message, $matches)) {
-            return '';
-        }
-
-        $activity = trim(preg_replace('/\s+/', ' ', $matches[1]) ?? $matches[1]);
-
-        return substr($activity, 0, 240);
     }
 }

@@ -1,5 +1,5 @@
 [Unit]
-Description=AgentTag high-priority acknowledgement worker
+Description=AgentTag high-priority model-selection worker
 After=network-online.target
 Wants=network-online.target
 

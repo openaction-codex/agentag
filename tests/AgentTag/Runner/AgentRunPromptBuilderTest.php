@@ -10,15 +10,15 @@ use PHPUnit\Framework\TestCase;
 
 final class AgentRunPromptBuilderTest extends TestCase
 {
-    public function testItKeepsSimpleWorkInTheLunaMaxMainAgent(): void
+    public function testItRequiresTheSelectedModelToWorkDirectly(): void
     {
         $run = $this->taskRun(TaskModelSelection::mainLuna('Straightforward wording change with known context.'));
 
         $prompt = (new AgentRunPromptBuilder())->build($run);
 
-        self::assertStringContainsString('Use GPT-5.6 Luna with max reasoning directly in this main agent.', $prompt);
-        self::assertStringContainsString('Straightforward wording change with known context.', $prompt);
-        self::assertStringContainsString('Do not delegate', $prompt);
+        self::assertStringContainsString('Complete the task directly in this Codex session.', $prompt);
+        self::assertStringContainsString('Do not delegate it to a subagent.', $prompt);
+        self::assertStringNotContainsString('Model routing decision', $prompt);
     }
 
     public function testItRestrictsResponsesToFrenchOrEnglishWithFrenchAsTheDefault(): void
@@ -30,33 +30,26 @@ final class AgentRunPromptBuilderTest extends TestCase
         self::assertStringContainsString('mixed, ambiguous, language-neutral, written in another language, or its language is uncertain', $prompt);
     }
 
-    public function testItEnforcesTheSelectedSolSubagentAtTheStart(): void
+    public function testItDoesNotIncludeModelRoutingOrSubagentInstructions(): void
     {
         $run = $this->taskRun(TaskModelSelection::fromRoute('sol-xhigh', 'Cross-system feature requiring architecture work.'));
 
         $prompt = (new AgentRunPromptBuilder())->build($run);
 
-        self::assertStringContainsString('GPT-5.6 Sol with xhigh reasoning', $prompt);
-        self::assertStringContainsString('project-scoped `sol-xhigh` subagent', $prompt);
-        self::assertStringContainsString('Before substantive task work, spawn exactly', $prompt);
-        self::assertStringContainsString('without full-history inheritance', $prompt);
-        self::assertStringContainsString('Use exactly "Doing: ..." with no Done or Next fields', $prompt);
-        self::assertStringContainsString('French-or-English response language selected by the interaction rules', $prompt);
-        self::assertStringContainsString('strips the label before displaying the activity', $prompt);
-        self::assertStringContainsString('never send timer-based or no-change updates', $prompt);
-        self::assertStringContainsString('wait silently between concrete current-activity notes', $prompt);
-        self::assertStringContainsString('Luna main agent remains responsible', $prompt);
+        self::assertStringContainsString('Do not delegate it to a subagent.', $prompt);
+        self::assertStringNotContainsString('sol-xhigh', $prompt);
+        self::assertStringNotContainsString('spawn', $prompt);
     }
 
-    public function testAResumedTaskDoesNotBlindlyRespawnItsSpecialist(): void
+    public function testAResumedTaskKeepsTheSameSessionContext(): void
     {
-        $run = $this->taskRun(TaskModelSelection::fromRoute('terra-max', 'Read-heavy synthesis across several documents.'));
+        $run = $this->taskRun(TaskModelSelection::fromRoute('sol-medium', 'Read-heavy synthesis across several documents.'));
         $run->recordCodexThread('thread-id');
 
         $prompt = (new AgentRunPromptBuilder())->build($run);
 
-        self::assertStringContainsString('Continue using the `terra-max` route.', $prompt);
-        self::assertStringContainsString('invoke it again only when the remaining work needs fresh specialist work', $prompt);
+        self::assertStringContainsString('This is a resumed stage of the same task.', $prompt);
+        self::assertStringContainsString('Do not delegate it to a subagent.', $prompt);
     }
 
     private function taskRun(?TaskModelSelection $selection): AgentRun

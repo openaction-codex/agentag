@@ -8,8 +8,6 @@ use App\AgentTag\Mattermost\MattermostInboundEvent;
 use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostRunProgressSinkFactory;
 use App\AgentTag\Mattermost\TaskCardRenderer;
-use App\AgentTag\Mattermost\TaskPresentation;
-use App\AgentTag\Mattermost\TaskPresentationGenerator;
 use App\AgentTag\Run\AgentRunTurnGate;
 use App\AgentTag\Run\RunEventRecorder;
 use App\AgentTag\Runner\AgentRunnerInput;
@@ -19,6 +17,7 @@ use App\AgentTag\Runner\AgentRunOrchestrator;
 use App\AgentTag\Runner\AgentRunPromptBuilder;
 use App\AgentTag\Runner\TaskContinuation;
 use App\AgentTag\Runner\TaskModelSelection;
+use App\AgentTag\Runner\TaskModelSelector;
 use App\AgentTag\Security\SensitiveTextRedactor;
 use App\AgentTag\Workspace\WorkspaceLayout;
 use App\Entity\AgentRun;
@@ -103,7 +102,7 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         self::assertContains(RunEvent::TYPE_TASK_WAITING, array_map(static fn (RunEvent $event): string => $event->type(), $events));
     }
 
-    public function testHighPriorityPreparationCreatesTheModelWrittenCardThenQueuesExecution(): void
+    public function testHighPriorityPreparationSelectsTheModelAndUpdatesTheExistingCard(): void
     {
         $entityManager = $this->entityManager();
         $run = $this->persistRun($entityManager);
@@ -114,7 +113,7 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         $factory = new MattermostRunProgressSinkFactory($notifier, $renderer, $entityManager);
         $handler = new PrepareAgentTaskMessageHandler(
             $entityManager,
-            new DurableTaskPresentationGenerator(),
+            new DurableTaskModelSelector(),
             $renderer,
             $notifier,
             $factory,
@@ -123,15 +122,16 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
 
         $handler(new PrepareAgentTaskMessage((int) $run->id()));
 
-        self::assertSame('Fix billing tests', $run->title());
-        self::assertSame('Workspace ready. I’m reproducing billing failures.', $run->acknowledgement());
+        self::assertSame('Fix and watch CI', $run->title());
+        self::assertSame('Workspace ready', $run->acknowledgement());
         self::assertSame('sol-xhigh', $run->modelSelection()->route);
         self::assertSame('task-post', $run->taskPostId());
-        self::assertCount(1, $notifier->createdMessages);
-        self::assertStringStartsWith('> ', $notifier->createdMessages[0]);
-        self::assertStringContainsString('Workspace ready. I’m reproducing billing failures.', $notifier->createdMessages[0]);
-        self::assertStringContainsString('Model: **GPT-5.6 Sol · xhigh** via `sol-xhigh`', $notifier->createdMessages[0]);
-        self::assertStringContainsString('Contained feature with several interacting changes.', $notifier->createdMessages[0]);
+        self::assertSame([], $notifier->createdMessages);
+        self::assertCount(1, $notifier->updatedMessages);
+        self::assertStringStartsWith('> ', $notifier->updatedMessages[0]);
+        self::assertStringContainsString('Model selected. Starting the task.', $notifier->updatedMessages[0]);
+        self::assertStringContainsString('Model: **GPT-5.6 Sol · xhigh**', $notifier->updatedMessages[0]);
+        self::assertStringContainsString('Contained feature with several interacting changes.', $notifier->updatedMessages[0]);
         self::assertSame([(int) $run->id()], $bus->runIds);
     }
 
@@ -245,6 +245,8 @@ final class DurableTraceableNotifier implements MattermostNotifier
     public array $threadMessages = [];
     /** @var list<string> */
     public array $createdMessages = [];
+    /** @var list<string> */
+    public array $updatedMessages = [];
 
     #[\Override]
     public function showTyping(MattermostInboundEvent $event): void
@@ -268,19 +270,18 @@ final class DurableTraceableNotifier implements MattermostNotifier
     #[\Override]
     public function updatePost(string $postId, string $message, array $props = []): bool
     {
+        $this->updatedMessages[] = $message;
+
         return true;
     }
 }
 
-final readonly class DurableTaskPresentationGenerator implements TaskPresentationGenerator
+final readonly class DurableTaskModelSelector implements TaskModelSelector
 {
     #[\Override]
-    public function generate(string $request, string $workingDirectory): TaskPresentation
+    public function select(string $request): TaskModelSelection
     {
-        return new TaskPresentation(
-            'Fix billing tests',
-            'Workspace ready. I’m reproducing billing failures.',
-            TaskModelSelection::fromRoute('sol-xhigh', 'Contained feature with several interacting changes.'),
-        );
+        return TaskModelSelection::fromRoute('sol-xhigh', 'Contained feature with several interacting changes.')
+            ?? throw new \LogicException('Expected a valid test model selection.');
     }
 }

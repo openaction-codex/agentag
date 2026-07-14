@@ -100,11 +100,6 @@ final class CodexJsonEventParser
         }
 
         $item = $data['item'] ?? null;
-        $subagentStarted = $this->subagentStartedFromItem($item);
-        if (null !== $subagentStarted) {
-            return $subagentStarted;
-        }
-
         if (is_array($item)) {
             $itemType = $item['type'] ?? null;
             if (!is_string($itemType) || !in_array($itemType, ['agent_message', 'assistant_message'], true)) {
@@ -123,33 +118,6 @@ final class CodexJsonEventParser
         }
 
         return new AgentRunnerProgress('agent_message', $message);
-    }
-
-    private function subagentStartedFromItem(mixed $item): ?AgentRunnerProgress
-    {
-        if (!is_array($item)
-            || 'collab_tool_call' !== ($item['type'] ?? null)
-            || 'spawn_agent' !== ($item['tool'] ?? null)
-            || 'completed' !== ($item['status'] ?? null)) {
-            return null;
-        }
-
-        $threadIds = $item['receiver_thread_ids'] ?? null;
-        if (!is_array($threadIds)) {
-            return null;
-        }
-
-        foreach ($threadIds as $threadId) {
-            if (is_string($threadId) && '' !== trim($threadId)) {
-                return new AgentRunnerProgress(
-                    'subagent_started',
-                    'Codex started a subagent thread.',
-                    ['thread_id' => trim($threadId)],
-                );
-            }
-        }
-
-        return null;
     }
 
     /**

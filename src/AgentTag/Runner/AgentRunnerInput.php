@@ -18,6 +18,8 @@ final readonly class AgentRunnerInput
         private ?\Closure $interruptionChecker = null,
         private ?string $resumeSessionId = null,
         private ?\Closure $sessionStartedCallback = null,
+        private string $model = 'gpt-5.6-luna',
+        private string $reasoningEffort = 'max',
     ) {
     }
 
@@ -74,5 +76,15 @@ final readonly class AgentRunnerInput
         if (null !== $this->sessionStartedCallback) {
             ($this->sessionStartedCallback)($sessionId);
         }
+    }
+
+    public function model(): string
+    {
+        return $this->model;
+    }
+
+    public function reasoningEffort(): string
+    {
+        return $this->reasoningEffort;
     }
 }

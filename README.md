@@ -5,11 +5,12 @@ AgentTag is a self-hosted Symfony bot that delegates Mattermost threads to Codex
 ## What it does
 
 - Accepts `@Codex` requests from a Mattermost outgoing webhook.
-- Immediately uses GPT-5.6 Luna with max reasoning to write a short acknowledgement, task title, and model-routing decision in French or English, defaulting to French unless the request is confidently English.
+- Immediately creates a Mattermost task card acknowledging receipt and showing that model selection is in progress.
+- Uses one ephemeral GPT-5.6 Luna call with medium reasoning and a JSON output schema to select Luna/max, Sol/medium, or Sol/xhigh.
 - Creates one Mattermost task card and updates it instead of streaming commands or harness events.
 - Renders the entire evolving task card as one blockquote so the separately posted answer is visually distinct.
 - Shows one Stop button while work is active, keeps the completed step timeline, then posts the answer after it.
-- Mirrors each concrete Sol/Terra current activity into the task card as one plain line while suppressing labels, prefixes, completed/next details, and generic waiting updates.
+- Runs the task directly on the selected model and mirrors its meaningful progress messages into the task card.
 - Treats new messages during a task as steering for the same Codex session.
 - Persists Codex session UUIDs and resumes them after steering, scheduled wakeups, retries, or worker restarts.
 - Supports waiting for CI, reviews, schedules, and other external state through durable Messenger wakeups.
@@ -23,7 +24,7 @@ AgentTag is Mattermost-only. Slack, global memory, approvals, and the web admin 
 - PHP 8.4, Composer, PostgreSQL 16 or compatible.
 - Codex CLI installed and authenticated for the worker’s Unix user.
 - A Mattermost bot token and outgoing webhook token.
-- One Symfony web process, one high-priority acknowledgement worker, and one or more task workers.
+- One Symfony web process, one high-priority model-selection worker, and one or more task workers.
 - A workspace template containing your `AGENTS.md`, skills, plugins, and shared documentation.
 
 ## Configuration
@@ -41,12 +42,10 @@ AGENTAG_TAG=@Codex
 AGENTAG_WORKSPACE_PATH=/srv/agentag/workspace
 AGENTAG_CONTEXT_MAX_CHARS=12000
 AGENTAG_RUN_TIMEOUT_SECONDS=1200
-AGENTAG_TASK_MODEL=gpt-5.6-luna
-AGENTAG_TASK_REASONING_EFFORT=max
 AGENTAG_REDACTION_PATTERNS=
 
-AGENTAG_ACK_MODEL=gpt-5.6-luna
-AGENTAG_ACK_TIMEOUT_SECONDS=20
+AGENTAG_MODEL_SELECTION_MODEL=gpt-5.6-luna
+AGENTAG_MODEL_SELECTION_TIMEOUT_SECONDS=20
 AGENTAG_TASK_DEADLINE_SECONDS=86400
 AGENTAG_MAX_RETRIES=2
 AGENTAG_RETRY_DELAY_SECONDS=60
@@ -62,11 +61,9 @@ MATTERMOST_RECENT_REPLY_LIMIT=20
 
 `AGENTAG_NOTIFICATION_PREFERENCE` accepts `all`, `milestones`, or `completion`. Users can override it per task with phrases such as “notify me only when complete” or “notify me on every update.” A request can set a shorter deadline with “deadline in 3 hours” (minutes, hours, and days are supported).
 
-The acknowledgement call uses Codex with `--ephemeral`, `gpt-5.6-luna`, and max reasoning. It classifies the request into a persisted model route and writes in English only for confidently English requests; every French, mixed, ambiguous, language-neutral, unsupported, or uncertain request uses French. If the call times out, fails, or returns an invalid route, AgentTag uses a deterministic French acknowledgement, safely falls back to Luna with max reasoning, and still queues the main task. The main task follows the same French-or-English policy.
+The webhook posts the initial task card before any Codex call. The preparation worker then calls Codex with `--ephemeral`, `gpt-5.6-luna`, medium reasoning, and `--output-schema`. Coding work is assigned to GPT-5.6 Sol/xhigh; simple implementation or product questions use GPT-5.6 Luna/max; everything else uses GPT-5.6 Sol/medium. If selection times out, fails, or returns an invalid route, AgentTag safely falls back to Sol/medium and still queues the task.
 
-The main task runner explicitly pins `AGENTAG_TASK_MODEL` and `AGENTAG_TASK_REASONING_EFFORT`; it does not rely on root’s interactive Codex defaults. The default parent is GPT-5.6 Luna with max reasoning. The task card shows the selected model, reasoning effort, delegation role, and routing rationale before execution. Project-scoped custom agents under `.codex/agents/` provide Terra/max and Sol/xhigh specialist routes while the Luna parent remains responsible for coordination and the final answer.
-
-When Codex reports a successful `spawn_agent` call, AgentTag records the child thread ID and inspects that child session's CLI metadata. The card shows a verified agent/model/reasoning line only when the actual role, model, and effort match the selected route; unavailable metadata or a mismatch is shown explicitly instead of being presented as verified. While the child runs, AgentTag tails its structured current-activity messages, strips the private `Doing:` marker, and mirrors only the activity text as a plain card stage.
+The selected model and reasoning effort are persisted on the run and passed directly to `codex exec` and `codex exec resume`; the task process does not delegate to another agent. The task card shows the selected profile and rationale before execution. The main task follows the workspace’s French-or-English response policy.
 
 ## Workspace layout
 
@@ -77,7 +74,6 @@ When Codex reports a successful `spawn_agent` call, AgentTag records the child t
   app/                         # this checkout
   workspace/                   # operator-managed template
     AGENTS.md
-    .codex/agents/              # optional project-scoped delegated agents
     skills/
     .codex-plugin/
     docs/
@@ -116,7 +112,7 @@ Codex can keep a task alive by ending a stage with this private protocol (the co
 <!-- agentag:{"action":"wait","seconds":300,"reason":"Waiting for CI"} -->
 ```
 
-AgentTag schedules the same run, then invokes `codex exec resume <session-uuid>` at the wake time. Doctrine Messenger retains delayed messages and retries across process restarts. A dedicated `acknowledgements` transport keeps acknowledgement and routing inference ahead of long task executions.
+AgentTag schedules the same run, then invokes `codex exec resume <session-uuid>` at the wake time. Doctrine Messenger retains delayed messages and retries across process restarts. A dedicated `acknowledgements` transport keeps model selection ahead of long task executions; the queue name is retained for deployment compatibility.
 
 ## Development and verification
 

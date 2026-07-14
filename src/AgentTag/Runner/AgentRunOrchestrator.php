@@ -73,6 +73,7 @@ final readonly class AgentRunOrchestrator
         ]);
         $progressSink?->onHeartbeat();
 
+        $modelSelection = $run->modelSelection();
         $result = $this->runner->run(new AgentRunnerInput(
             $prompt,
             $workingDirectory,
@@ -87,6 +88,8 @@ final readonly class AgentRunOrchestrator
                 $run->recordCodexThread($sessionId);
                 $this->entityManager->flush();
             },
+            $modelSelection->model,
+            $modelSelection->effort,
         ));
 
         if (null !== $result->sessionId()) {

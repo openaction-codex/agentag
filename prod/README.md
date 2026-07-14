@@ -81,6 +81,7 @@ Create the workspace template. Put your real `AGENTS.md`, skills, Codex plugins,
 ```bash
 cat > /srv/agentag/workspace/AGENTS.md <<'EOF'
 Answer only in French or English. Use English only when the latest user message is confidently English; otherwise use French. Keep Mattermost updates concise. Ask for confirmation before pushing main, force pushing, deleting, overwriting, or other destructive changes.
+Complete each request directly in the current Codex session.
 Document available repositories and clone instructions here. Clone repositories into the session workspace when needed.
 EOF
 ```
@@ -101,11 +102,9 @@ AGENTAG_TAG=@Codex
 AGENTAG_WORKSPACE_PATH=/srv/agentag/workspace
 AGENTAG_CONTEXT_MAX_CHARS=12000
 AGENTAG_RUN_TIMEOUT_SECONDS=1200
-AGENTAG_TASK_MODEL=gpt-5.6-luna
-AGENTAG_TASK_REASONING_EFFORT=max
 AGENTAG_REDACTION_PATTERNS=
-AGENTAG_ACK_MODEL=gpt-5.6-luna
-AGENTAG_ACK_TIMEOUT_SECONDS=20
+AGENTAG_MODEL_SELECTION_MODEL=gpt-5.6-luna
+AGENTAG_MODEL_SELECTION_TIMEOUT_SECONDS=20
 AGENTAG_TASK_DEADLINE_SECONDS=86400
 AGENTAG_MAX_RETRIES=2
 AGENTAG_RETRY_DELAY_SECONDS=60
@@ -218,7 +217,7 @@ systemctl enable --now agentag-ack-worker
 systemctl enable --now agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4
 ```
 
-The dedicated acknowledgement worker runs Luna with max reasoning for acknowledgement and routing, creating task cards without waiting behind long jobs. The four `agentag-worker@N` instances allow four different chat threads to run at the same time. Adjust that number to match the VPS. AgentTag still serializes work inside one thread.
+The web process creates the pending task card immediately. The dedicated preparation worker then runs the ephemeral Luna/medium model selector without waiting behind long jobs. The four `agentag-worker@N` instances execute tasks directly on the selected profile and allow four different chat threads to run at the same time. Adjust that number to match the VPS. AgentTag still serializes work inside one thread.
 
 Check service state and HTTP endpoints:
 

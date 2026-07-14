@@ -33,7 +33,7 @@ final class MattermostRunProgressSinkTest extends TestCase
             self::assertStringStartsWith('> ', $line);
         }
         self::assertStringContainsString('Reproduced three billing test failures.', $notifier->updatedPosts[0]);
-        self::assertStringContainsString('Model: **GPT-5.6 Luna · max** in the main agent', $notifier->updatedPosts[0]);
+        self::assertStringContainsString('Model: **GPT-5.6 Luna · max**', $notifier->updatedPosts[0]);
         self::assertStringNotContainsString('phpunit output', $notifier->updatedPosts[0]);
         $attachments = $notifier->updatedProps[0]['attachments'] ?? null;
         self::assertIsArray($attachments);
@@ -45,59 +45,16 @@ final class MattermostRunProgressSinkTest extends TestCase
         self::assertSame([], $notifier->threadMessages);
     }
 
-    public function testItKeepsVerifiedSubagentMetadataVisibleInTheQuotedCard(): void
+    public function testItShowsTheDirectlySelectedSolProfile(): void
     {
         $notifier = new ProgressTraceableMattermostNotifier();
-        $run = $this->task(TaskModelSelection::fromRoute('sol-xhigh', 'Advanced cross-system implementation.'));
+        $run = $this->task(TaskModelSelection::fromRoute('sol-medium', 'General non-coding task.'));
         $sink = $this->sink($notifier, $run);
 
-        $sink->onProgress(new AgentRunnerProgress('subagent_started', 'Codex started a subagent thread.', [
-            'thread_id' => '019f5b58-902e-7132-9185-049c23e5cc7b',
-            'agent' => 'sol-xhigh',
-            'model' => 'gpt-5.6-sol',
-            'reasoning_effort' => 'xhigh',
-            'verified' => true,
-        ]));
+        $sink->onProgress(new AgentRunnerProgress('agent_message', 'I am preparing the requested summary.'));
 
         self::assertCount(1, $notifier->updatedPosts);
-        self::assertStringContainsString('> Agent: ✓ Verified **GPT-5.6 Sol · xhigh** via `sol-xhigh` started', $notifier->updatedPosts[0]);
-        self::assertStringContainsString('`019f5b58-902e-7132-9185-049c23e5cc7b`', $notifier->updatedPosts[0]);
-        self::assertSame('sol-xhigh', $run->subagentAgent());
-        self::assertTrue($run->subagentMetadataVerified());
-    }
-
-    public function testItShowsOnlyTheSubagentCurrentActivityWithoutALabelOrPrefix(): void
-    {
-        $notifier = new ProgressTraceableMattermostNotifier();
-        $run = $this->task(TaskModelSelection::fromRoute('sol-xhigh', 'Advanced cross-system implementation.'));
-        $run->recordSubagentStarted('child-thread', 'sol-xhigh', 'gpt-5.6-sol', 'xhigh', true);
-        $sink = $this->sink($notifier, $run);
-
-        $sink->onProgress(new AgentRunnerProgress(
-            'subagent_progress',
-            "Done: issue reproduced.\nDoing: patching the handler. Next: run focused tests.",
-            ['thread_id' => 'child-thread'],
-        ));
-
-        self::assertCount(1, $notifier->updatedPosts);
-        self::assertStringContainsString('> → patching the handler.', $notifier->updatedPosts[0]);
-        self::assertStringNotContainsString('Done:', $notifier->updatedPosts[0]);
-        self::assertStringNotContainsString('Doing:', $notifier->updatedPosts[0]);
-        self::assertStringNotContainsString('Next:', $notifier->updatedPosts[0]);
-        self::assertStringNotContainsString('Sol —', $notifier->updatedPosts[0]);
-        self::assertSame('patching the handler.', $run->currentStage());
-    }
-
-    public function testItDoesNotDisplayUnstructuredSubagentMessages(): void
-    {
-        $notifier = new ProgressTraceableMattermostNotifier();
-        $run = $this->task(TaskModelSelection::fromRoute('sol-xhigh', 'Advanced cross-system implementation.'));
-        $sink = $this->sink($notifier, $run);
-
-        $sink->onProgress(new AgentRunnerProgress('subagent_progress', 'Finished the patch and tests are next.'));
-
-        self::assertSame([], $notifier->updatedPosts);
-        self::assertSame('Workspace ready', $run->currentStage());
+        self::assertStringContainsString('Model: **GPT-5.6 Sol · medium** — General non-coding task.', $notifier->updatedPosts[0]);
     }
 
     public function testFinishKeepsTheStepsAndPostsTheAnswerAfterTheCardOnlyOnce(): void
@@ -114,7 +71,7 @@ final class MattermostRunProgressSinkTest extends TestCase
         self::assertStringContainsString('✅ **Fix billing tests**', $notifier->updatedPosts[0]);
         self::assertStringContainsString('✓ Workspace ready', $notifier->updatedPosts[0]);
         self::assertStringContainsString('✓ Complete task and verify results', $notifier->updatedPosts[0]);
-        self::assertStringContainsString('Model: **GPT-5.6 Luna · max** in the main agent', $notifier->updatedPosts[0]);
+        self::assertStringContainsString('Model: **GPT-5.6 Luna · max**', $notifier->updatedPosts[0]);
         self::assertStringNotContainsString('428 tests passed', $notifier->updatedPosts[0]);
         self::assertSame([], $notifier->updatedProps[0]['attachments']);
         self::assertSame(["Cause\nRounding order.\n\nVerification\n• 428 tests passed"], $notifier->createdMessages);

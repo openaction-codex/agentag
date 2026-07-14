@@ -32,7 +32,7 @@ use Symfony\Component\Routing\RouteCollection;
 
 final class MattermostInteractionHandlerTest extends TestCase
 {
-    public function testItCreatesOneModelWrittenTaskCardAndQueuesTheTask(): void
+    public function testItImmediatelyCreatesAPendingModelTaskCardAndQueuesSelection(): void
     {
         $notifier = new TraceableMattermostNotifier();
         $store = new TraceableChatSessionStore();
@@ -44,8 +44,13 @@ final class MattermostInteractionHandlerTest extends TestCase
         self::assertTrue($result->isHandled());
         self::assertSame([1], $bus->preparationRunIds);
         self::assertSame([], $bus->runIds);
-        self::assertSame([], $notifier->createdPosts);
-        self::assertNull($store->savedRuns[0]->taskPostId());
+        self::assertCount(1, $notifier->createdPosts);
+        self::assertStringContainsString('**Request received**', $notifier->createdPosts[0]);
+        self::assertStringContainsString('Model: **Deciding which model to use**', $notifier->createdPosts[0]);
+        self::assertStringContainsString('→ Request received. Deciding which model to use.', $notifier->createdPosts[0]);
+        $savedRun = array_pop($store->savedRuns);
+        self::assertInstanceOf(AgentRun::class, $savedRun);
+        self::assertSame('task-post-1', $savedRun->taskPostId());
         self::assertSame(['mattermost:team:channel:post'], $store->sessionKeys);
     }
 

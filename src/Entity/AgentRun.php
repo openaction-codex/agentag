@@ -48,21 +48,6 @@ class AgentRun
     private ?string $modelSelectionReason = null;
 
     #[ORM\Column(length: 64, nullable: true)]
-    private ?string $subagentThreadId = null;
-
-    #[ORM\Column(length: 64, nullable: true)]
-    private ?string $subagentAgent = null;
-
-    #[ORM\Column(length: 64, nullable: true)]
-    private ?string $subagentModel = null;
-
-    #[ORM\Column(length: 16, nullable: true)]
-    private ?string $subagentReasoningEffort = null;
-
-    #[ORM\Column(nullable: true)]
-    private ?bool $subagentMetadataVerified = null;
-
-    #[ORM\Column(length: 64, nullable: true)]
     private ?string $taskPostId = null;
 
     #[ORM\Column(length: 64, nullable: true)]
@@ -300,32 +285,12 @@ class AgentRun
     public function modelSelection(): TaskModelSelection
     {
         return TaskModelSelection::fromRoute($this->modelRoute ?? '', $this->modelSelectionReason ?? '')
-            ?? TaskModelSelection::mainLuna();
+            ?? TaskModelSelection::solMedium();
     }
 
-    public function subagentThreadId(): ?string
+    public function hasModelSelection(): bool
     {
-        return $this->subagentThreadId;
-    }
-
-    public function subagentAgent(): ?string
-    {
-        return $this->subagentAgent;
-    }
-
-    public function subagentModel(): ?string
-    {
-        return $this->subagentModel;
-    }
-
-    public function subagentReasoningEffort(): ?string
-    {
-        return $this->subagentReasoningEffort;
-    }
-
-    public function subagentMetadataVerified(): bool
-    {
-        return true === $this->subagentMetadataVerified;
+        return null !== TaskModelSelection::fromRoute($this->modelRoute ?? '', $this->modelSelectionReason ?? '');
     }
 
     public function taskPostId(): ?string
@@ -442,6 +407,22 @@ class AgentRun
         $this->currentStage = $acknowledgement;
     }
 
+    public function acknowledgeTask(string $title, string $acknowledgement): void
+    {
+        $this->title = $title;
+        $this->acknowledgement = $acknowledgement;
+        $this->modelRoute = null;
+        $this->modelSelectionReason = null;
+        $this->currentStage = $acknowledgement;
+    }
+
+    public function selectModel(TaskModelSelection $modelSelection): void
+    {
+        $this->modelRoute = $modelSelection->route;
+        $this->modelSelectionReason = $modelSelection->reason;
+        $this->updateStage('Model selected. Starting the task.');
+    }
+
     public function assignTaskPost(string $postId): void
     {
         $this->taskPostId = $postId;
@@ -450,20 +431,6 @@ class AgentRun
     public function assignAnswerPost(string $postId): void
     {
         $this->answerPostId = $postId;
-    }
-
-    public function recordSubagentStarted(
-        string $threadId,
-        ?string $agent,
-        ?string $model,
-        ?string $reasoningEffort,
-        bool $metadataVerified,
-    ): void {
-        $this->subagentThreadId = substr(trim($threadId), 0, 64);
-        $this->subagentAgent = null === $agent ? null : substr(trim($agent), 0, 64);
-        $this->subagentModel = null === $model ? null : substr(trim($model), 0, 64);
-        $this->subagentReasoningEffort = null === $reasoningEffort ? null : substr(trim($reasoningEffort), 0, 16);
-        $this->subagentMetadataVerified = $metadataVerified;
     }
 
     public function changeNotificationPreference(string $preference): void

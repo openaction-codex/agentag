@@ -8,8 +8,8 @@ final readonly class AgentTagSettings
         private string $tag,
         private string $workspacePath,
         private int $runTimeoutSeconds = 1200,
-        private string $acknowledgementModel = 'gpt-5.6-luna',
-        private int $acknowledgementTimeoutSeconds = 20,
+        private string $modelSelectionModel = 'gpt-5.6-luna',
+        private int $modelSelectionTimeoutSeconds = 20,
         private int $taskDeadlineSeconds = 86400,
         private int $maxRetries = 2,
         private int $retryDelaySeconds = 60,
@@ -20,7 +20,10 @@ final readonly class AgentTagSettings
         if ($runTimeoutSeconds < 1) {
             throw new \InvalidArgumentException('AgentTag run timeout must be a positive integer.');
         }
-        if ($acknowledgementTimeoutSeconds < 1 || $taskDeadlineSeconds < 1 || $maxRetries < 0 || $retryDelaySeconds < 1) {
+        if ('' === trim($modelSelectionModel)) {
+            throw new \InvalidArgumentException('AgentTag model-selection model must not be blank.');
+        }
+        if ($modelSelectionTimeoutSeconds < 1 || $taskDeadlineSeconds < 1 || $maxRetries < 0 || $retryDelaySeconds < 1) {
             throw new \InvalidArgumentException('AgentTag task timing and retry settings are invalid.');
         }
         if (!in_array($notificationPreference, ['all', 'milestones', 'completion'], true)) {
@@ -43,14 +46,14 @@ final readonly class AgentTagSettings
         return $this->runTimeoutSeconds;
     }
 
-    public function acknowledgementModel(): string
+    public function modelSelectionModel(): string
     {
-        return $this->acknowledgementModel;
+        return $this->modelSelectionModel;
     }
 
-    public function acknowledgementTimeoutSeconds(): int
+    public function modelSelectionTimeoutSeconds(): int
     {
-        return $this->acknowledgementTimeoutSeconds;
+        return $this->modelSelectionTimeoutSeconds;
     }
 
     public function taskDeadlineSeconds(): int
