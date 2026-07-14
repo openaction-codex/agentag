@@ -61,7 +61,7 @@ MATTERMOST_RECENT_REPLY_LIMIT=20
 
 `AGENTAG_NOTIFICATION_PREFERENCE` accepts `all`, `milestones`, or `completion`. Users can override it per task with phrases such as “notify me only when complete” or “notify me on every update.” A request can set a shorter deadline with “deadline in 3 hours” (minutes, hours, and days are supported).
 
-The webhook posts the initial task card before any Codex call. The preparation worker then calls Codex with `--ephemeral`, `gpt-5.6-luna`, medium reasoning, and `--output-schema`. Coding work is assigned to GPT-5.6 Sol/xhigh; simple implementation or product questions use GPT-5.6 Luna/max; everything else uses GPT-5.6 Sol/medium. If selection times out, fails, or returns an invalid route, AgentTag safely falls back to Sol/medium and still queues the task.
+The webhook posts the initial task card before any Codex call. The preparation worker then calls Codex with `--ephemeral`, `gpt-5.6-luna`, medium reasoning, and `--output-schema`. Coding work is assigned to GPT-5.6 Sol/xhigh. Simple routine work that does not require long context—including product or general questions, classification, extraction, short summaries, status updates, and simple MCP reads—uses GPT-5.6 Luna/max. Remaining non-coding work uses GPT-5.6 Sol/medium. If selection times out, fails, or returns an invalid route, AgentTag safely falls back to Sol/medium and still queues the task.
 
 The selected model and reasoning effort are persisted on the run and passed directly to `codex exec` and `codex exec resume`; the task process does not delegate to another agent. The task card shows the selected profile and rationale before execution. The main task follows the workspace’s French-or-English response policy.
 

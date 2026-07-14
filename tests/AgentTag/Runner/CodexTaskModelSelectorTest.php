@@ -33,8 +33,10 @@ final class CodexTaskModelSelectorTest extends TestCase
         self::assertIsArray($route);
         self::assertSame(['luna-max', 'sol-medium', 'sol-xhigh'], $route['enum'] ?? null);
         self::assertStringContainsString('every coding task', $factory->input);
-        self::assertStringContainsString('simple questions about the current implementation or product', $factory->input);
-        self::assertStringContainsString('every other task', $factory->input);
+        self::assertStringContainsString('every simple, routine task that does not require long context', $factory->input);
+        self::assertStringContainsString('product questions, implementation questions, general questions, classification, extraction, short summarization, status updates, and simple MCP reads', $factory->input);
+        self::assertStringContainsString('every remaining non-coding task', $factory->input);
+        self::assertStringContainsString('long context, broad synthesis, deeper judgment, or consequential recommendations', $factory->input);
     }
 
     public function testItUsesSolMediumWhenTheGeneratedRouteIsInvalid(): void

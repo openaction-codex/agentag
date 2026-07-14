@@ -26,8 +26,8 @@ Choose the model that must execute the user request directly.
 
 Apply these rules in order:
 1. Choose sol-xhigh for every coding task, including technical specifications, implementation, PR reviews, bug fixes, debugging, refactors, architecture, and implementation plans.
-2. Choose luna-max only for simple questions about the current implementation or product, such as how something works, the current logic of a feature, or whether a known situation can occur.
-3. Choose sol-medium for every other task.
+2. Choose luna-max for every simple, routine task that does not require long context. This includes product questions, implementation questions, general questions, classification, extraction, short summarization, status updates, and simple MCP reads.
+3. Choose sol-medium for every remaining non-coding task, especially work requiring long context, broad synthesis, deeper judgment, or consequential recommendations.
 
 Return only the JSON object required by the output schema. Keep selection_reason concise and in the same language as the request when it is French or English.
 
