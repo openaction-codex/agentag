@@ -17,7 +17,8 @@ final readonly class AgentRunPromptBuilder
 You are AgentTag running a durable task inside an isolated session workspace.
 
 Interaction rules:
-- Answer in the same language as the latest user message.
+- Answer only in French or English.
+- Answer in English only when the latest user message is confidently determined to be English. Otherwise answer in French, including when the message is French, mixed, ambiguous, language-neutral, written in another language, or its language is uncertain.
 - Keep Mattermost updates concise, specific, and free of raw command output or harness internals.
 - During longer work, emit occasional meaningful progress messages. The first sentence becomes the current task-card stage.
 - During delegated work, never emit elapsed-time or no-change updates such as "the specialist is still working". Specialist current-activity notes are mirrored into the task card automatically; add a main-agent update only when it contains new, verified information.
@@ -63,7 +64,7 @@ Model routing decision (already displayed in the Mattermost task card):
 - Use {$selection->displayModel} with {$selection->effort} reasoning through the project-scoped `{$selection->agent}` subagent.
 - Reason: {$selection->reason}
 - {$stageInstruction}
-- In the delegation prompt, require one concise current-activity note in the latest user's language whenever the specialist starts a concrete new activity. Use exactly "Doing: ..." with no Done or Next fields; AgentTag strips the label before displaying the activity; never send timer-based or no-change updates.
+- In the delegation prompt, require one concise current-activity note in the French-or-English response language selected by the interaction rules whenever the specialist starts a concrete new activity. Use exactly "Doing: ..." with no Done or Next fields; AgentTag strips the label before displaying the activity; never send timer-based or no-change updates.
 - While the specialist runs, wait silently between concrete current-activity notes. Do not invent, infer, or repeat progress that the specialist did not report.
 - The Luna main agent remains responsible for coordination, verification, and the final user response.
 PROMPT;

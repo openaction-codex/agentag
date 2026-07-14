@@ -30,6 +30,9 @@ final class AcknowledgementGeneratorTest extends TestCase
         self::assertStringNotContainsString('sol-high', $factory->input);
         self::assertStringNotContainsString('sol-max', $factory->input);
         self::assertStringContainsString('terra-max', $factory->input);
+        self::assertStringContainsString('only in French or English', $factory->input);
+        self::assertStringContainsString('Use English only when the user request is confidently determined to be English.', $factory->input);
+        self::assertStringContainsString('mixed, ambiguous, language-neutral, written in another language, or its language is uncertain', $factory->input);
     }
 
     public function testItSafelyUsesLunaMaxWhenTheGeneratedRouteIsInvalid(): void
@@ -42,6 +45,17 @@ final class AcknowledgementGeneratorTest extends TestCase
         self::assertSame('luna-max', $presentation->modelSelection->route);
         self::assertSame('max', $presentation->modelSelection->effort);
         self::assertSame('main', $presentation->modelSelection->agent);
+    }
+
+    public function testItUsesACompleteFrenchFallbackWhenTheClassifierOutputIsInvalid(): void
+    {
+        $generator = new AcknowledgementGenerator(new AcknowledgementProcessFactory('not-json'), new AgentTagSettings('@Codex', '/tmp'));
+
+        $presentation = $generator->generate('@Codex haz algo', '/tmp');
+
+        self::assertSame('Traitement de votre demande', $presentation->title);
+        self::assertSame('Espace prêt. J’analyse la demande et détermine la première action utile.', $presentation->acknowledgement);
+        self::assertSame('Le classifieur initial est indisponible ; la route sûre de l’agent principal est utilisée.', $presentation->modelSelection->reason);
     }
 }
 

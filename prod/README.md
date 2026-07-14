@@ -80,7 +80,7 @@ Create the workspace template. Put your real `AGENTS.md`, skills, Codex plugins,
 
 ```bash
 cat > /srv/agentag/workspace/AGENTS.md <<'EOF'
-Answer in the user's language. Keep Mattermost updates concise. Ask for confirmation before pushing main, force pushing, deleting, overwriting, or other destructive changes.
+Answer only in French or English. Use English only when the latest user message is confidently English; otherwise use French. Keep Mattermost updates concise. Ask for confirmation before pushing main, force pushing, deleting, overwriting, or other destructive changes.
 Document available repositories and clone instructions here. Clone repositories into the session workspace when needed.
 EOF
 ```

@@ -21,6 +21,15 @@ final class AgentRunPromptBuilderTest extends TestCase
         self::assertStringContainsString('Do not delegate', $prompt);
     }
 
+    public function testItRestrictsResponsesToFrenchOrEnglishWithFrenchAsTheDefault(): void
+    {
+        $prompt = (new AgentRunPromptBuilder())->build($this->taskRun(TaskModelSelection::mainLuna()));
+
+        self::assertStringContainsString('Answer only in French or English.', $prompt);
+        self::assertStringContainsString('Answer in English only when the latest user message is confidently determined to be English.', $prompt);
+        self::assertStringContainsString('mixed, ambiguous, language-neutral, written in another language, or its language is uncertain', $prompt);
+    }
+
     public function testItEnforcesTheSelectedSolSubagentAtTheStart(): void
     {
         $run = $this->taskRun(TaskModelSelection::fromRoute('sol-xhigh', 'Cross-system feature requiring architecture work.'));
@@ -32,6 +41,7 @@ final class AgentRunPromptBuilderTest extends TestCase
         self::assertStringContainsString('Before substantive task work, spawn exactly', $prompt);
         self::assertStringContainsString('without full-history inheritance', $prompt);
         self::assertStringContainsString('Use exactly "Doing: ..." with no Done or Next fields', $prompt);
+        self::assertStringContainsString('French-or-English response language selected by the interaction rules', $prompt);
         self::assertStringContainsString('strips the label before displaying the activity', $prompt);
         self::assertStringContainsString('never send timer-based or no-change updates', $prompt);
         self::assertStringContainsString('wait silently between concrete current-activity notes', $prompt);

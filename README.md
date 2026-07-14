@@ -5,7 +5,7 @@ AgentTag is a self-hosted Symfony bot that delegates Mattermost threads to Codex
 ## What it does
 
 - Accepts `@Codex` requests from a Mattermost outgoing webhook.
-- Immediately uses GPT-5.6 Luna with max reasoning to write a short acknowledgement, task title, and model-routing decision in the user’s language.
+- Immediately uses GPT-5.6 Luna with max reasoning to write a short acknowledgement, task title, and model-routing decision in French or English, defaulting to French unless the request is confidently English.
 - Creates one Mattermost task card and updates it instead of streaming commands or harness events.
 - Renders the entire evolving task card as one blockquote so the separately posted answer is visually distinct.
 - Shows one Stop button while work is active, keeps the completed step timeline, then posts the answer after it.
@@ -62,7 +62,7 @@ MATTERMOST_RECENT_REPLY_LIMIT=20
 
 `AGENTAG_NOTIFICATION_PREFERENCE` accepts `all`, `milestones`, or `completion`. Users can override it per task with phrases such as “notify me only when complete” or “notify me on every update.” A request can set a shorter deadline with “deadline in 3 hours” (minutes, hours, and days are supported).
 
-The acknowledgement call uses Codex with `--ephemeral`, `gpt-5.6-luna`, and max reasoning. It classifies the request into a persisted model route and writes a short rationale in the user's language. If it times out, fails, or returns an invalid route, AgentTag safely falls back to Luna with max reasoning and still queues the main task.
+The acknowledgement call uses Codex with `--ephemeral`, `gpt-5.6-luna`, and max reasoning. It classifies the request into a persisted model route and writes in English only for confidently English requests; every French, mixed, ambiguous, language-neutral, unsupported, or uncertain request uses French. If the call times out, fails, or returns an invalid route, AgentTag uses a deterministic French acknowledgement, safely falls back to Luna with max reasoning, and still queues the main task. The main task follows the same French-or-English policy.
 
 The main task runner explicitly pins `AGENTAG_TASK_MODEL` and `AGENTAG_TASK_REASONING_EFFORT`; it does not rely on root’s interactive Codex defaults. The default parent is GPT-5.6 Luna with max reasoning. The task card shows the selected model, reasoning effort, delegation role, and routing rationale before execution. Project-scoped custom agents under `.codex/agents/` provide Terra/max and Sol/xhigh specialist routes while the Luna parent remains responsible for coordination and the final answer.
 

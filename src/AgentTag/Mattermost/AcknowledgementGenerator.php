@@ -20,20 +20,21 @@ final class AcknowledgementGenerator implements TaskPresentationGenerator
     public function generate(string $request, string $workingDirectory): TaskPresentation
     {
         $fallback = new TaskPresentation(
-            $this->fallbackTitle($request),
-            'Workspace ready. I’m inspecting the request and deciding the first useful step.',
-            TaskModelSelection::mainLuna('The intake classifier was unavailable, so the safe primary-agent default is used.'),
+            'Traitement de votre demande',
+            'Espace prêt. J’analyse la demande et détermine la première action utile.',
+            TaskModelSelection::mainLuna('Le classifieur initial est indisponible ; la route sûre de l’agent principal est utilisée.'),
         );
 
         $outputPath = sys_get_temp_dir().'/agentag-ack-'.bin2hex(random_bytes(8)).'.txt';
         $prompt = <<<'PROMPT'
 You write the immediate acknowledgement for a software agent task.
 Return exactly one JSON object with string keys "title", "acknowledgement", "route", and "selection_reason" and no markdown.
-- Detect and use the language of the user request.
+- Write the title, acknowledgement, and selection_reason only in French or English.
+- Use English only when the user request is confidently determined to be English. Otherwise use French, including when the request is French, mixed, ambiguous, language-neutral, written in another language, or its language is uncertain.
 - title: specific, 3 to 8 words, no trailing punctuation.
 - acknowledgement: at most 18 words; say the workspace is ready and name the first useful action.
 - route: choose exactly one value from the routing policy below.
-- selection_reason: at most 18 words, in the user's language, explaining the task type or complexity that determined the route.
+- selection_reason: at most 18 words, in the selected French-or-English language, explaining the task type or complexity that determined the route.
 - Do not claim work has happened beyond preparing the workspace.
 
 Routing policy:
@@ -99,16 +100,8 @@ PROMPT;
         }
 
         $selection = TaskModelSelection::fromRoute($route, $selectionReason)
-            ?? TaskModelSelection::mainLuna('The intake response had no valid specialist route, so the primary agent is used.');
+            ?? TaskModelSelection::mainLuna('La réponse initiale ne contient aucune route spécialiste valide ; l’agent principal est utilisé.');
 
         return new TaskPresentation(substr($title, 0, 160), substr($acknowledgement, 0, 300), $selection);
-    }
-
-    private function fallbackTitle(string $request): string
-    {
-        $request = preg_replace('/^@[A-Za-z][A-Za-z0-9_-]{1,63}[:,]?\s*/', '', trim($request)) ?? trim($request);
-        $request = preg_replace('/\s+/', ' ', $request) ?? $request;
-
-        return '' === $request ? 'Working on your request' : substr($request, 0, 80);
     }
 }

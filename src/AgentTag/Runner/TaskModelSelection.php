@@ -40,7 +40,7 @@ final readonly class TaskModelSelection
         );
     }
 
-    public static function mainLuna(string $reason = 'Routine request handled directly by the primary agent.'): self
+    public static function mainLuna(string $reason = 'Demande courante traitée directement par l’agent principal.'): self
     {
         return self::fromRoute('luna-max', $reason) ?? throw new \LogicException('The Luna route must be valid.');
     }
