@@ -6,6 +6,7 @@ final readonly class TaskModelSelection
 {
     /** @var array<string, array{model: string, effort: string, display: string}> */
     private const array ROUTES = [
+        'luna-low' => ['model' => 'gpt-5.6-luna', 'effort' => 'low', 'display' => 'GPT-5.6 Luna'],
         'luna-max' => ['model' => 'gpt-5.6-luna', 'effort' => 'max', 'display' => 'GPT-5.6 Luna'],
         'sol-medium' => ['model' => 'gpt-5.6-sol', 'effort' => 'medium', 'display' => 'GPT-5.6 Sol'],
         'sol-xhigh' => ['model' => 'gpt-5.6-sol', 'effort' => 'xhigh', 'display' => 'GPT-5.6 Sol'],

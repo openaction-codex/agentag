@@ -31,12 +31,29 @@ final class CodexTaskModelSelectorTest extends TestCase
         self::assertIsArray($properties);
         $route = $properties['route'] ?? null;
         self::assertIsArray($route);
-        self::assertSame(['luna-max', 'sol-medium', 'sol-xhigh'], $route['enum'] ?? null);
-        self::assertStringContainsString('every coding task', $factory->input);
-        self::assertStringContainsString('every simple, routine task that does not require long context', $factory->input);
-        self::assertStringContainsString('product questions, implementation questions, general questions, classification, extraction, short summarization, status updates, and simple MCP reads', $factory->input);
+        self::assertSame(['luna-low', 'luna-max', 'sol-medium', 'sol-xhigh'], $route['enum'] ?? null);
+        self::assertStringContainsString("stop, cancel, or interrupt the agent's current work", $factory->input);
+        self::assertStringContainsString('current agent status or current MCP server status', $factory->input);
+        self::assertStringContainsString('functional testing of a PR (PR functional validation)', $factory->input);
+        self::assertStringContainsString('writing a technical specification', $factory->input);
+        self::assertStringContainsString('every remaining coding task', $factory->input);
+        self::assertStringContainsString('every remaining simple, routine task that does not require long context', $factory->input);
+        self::assertStringContainsString('product questions, implementation questions, general questions, classification, extraction, short summarization, status updates, and other simple MCP reads', $factory->input);
         self::assertStringContainsString('every remaining non-coding task', $factory->input);
         self::assertStringContainsString('long context, broad synthesis, deeper judgment, or consequential recommendations', $factory->input);
+    }
+
+    public function testItSupportsLunaLowForExtremelySimpleTasks(): void
+    {
+        $factory = new ModelSelectionProcessFactory('{"route":"luna-low","selection_reason":"Simple agent status check."}');
+        $selector = new CodexTaskModelSelector($factory, new AgentTagSettings('@Codex', '/tmp'));
+
+        $selection = $selector->select('check the current agent status');
+
+        self::assertSame('luna-low', $selection->route);
+        self::assertSame('gpt-5.6-luna', $selection->model);
+        self::assertSame('low', $selection->effort);
+        self::assertSame('Simple agent status check.', $selection->reason);
     }
 
     public function testItUsesSolMediumWhenTheGeneratedRouteIsInvalid(): void

@@ -25,9 +25,11 @@ final readonly class CodexTaskModelSelector implements TaskModelSelector
 Choose the model that must execute the user request directly.
 
 Apply these rules in order:
-1. Choose sol-xhigh for every coding task, including technical specifications, implementation, PR reviews, bug fixes, debugging, refactors, architecture, and implementation plans.
-2. Choose luna-max for every simple, routine task that does not require long context. This includes product questions, implementation questions, general questions, classification, extraction, short summarization, status updates, and simple MCP reads.
-3. Choose sol-medium for every remaining non-coding task, especially work requiring long context, broad synthesis, deeper judgment, or consequential recommendations.
+1. Choose luna-low only for an extremely simple request whose entire purpose is to stop, cancel, or interrupt the agent's current work, or to check the current agent status or current MCP server status.
+2. Choose sol-medium for functional testing of a PR (PR functional validation) and for writing a technical specification.
+3. Choose sol-xhigh for every remaining coding task, including implementation, code reviews, bug fixes, debugging, refactors, architecture, and implementation plans.
+4. Choose luna-max for every remaining simple, routine task that does not require long context. This includes product questions, implementation questions, general questions, classification, extraction, short summarization, status updates, and other simple MCP reads.
+5. Choose sol-medium for every remaining non-coding task, especially work requiring long context, broad synthesis, deeper judgment, or consequential recommendations.
 
 Return only the JSON object required by the output schema. Keep selection_reason concise and in the same language as the request when it is French or English.
 
@@ -84,7 +86,7 @@ PROMPT;
             'properties' => [
                 'route' => [
                     'type' => 'string',
-                    'enum' => ['luna-max', 'sol-medium', 'sol-xhigh'],
+                    'enum' => ['luna-low', 'luna-max', 'sol-medium', 'sol-xhigh'],
                 ],
                 'selection_reason' => ['type' => 'string'],
             ],
