@@ -110,6 +110,7 @@ AGENTAG_MAX_RETRIES=2
 AGENTAG_RETRY_DELAY_SECONDS=60
 AGENTAG_NOTIFICATION_PREFERENCE=milestones
 
+GITHUB_PAT_TOKEN=github_pat_change_this
 MATTERMOST_WEBHOOK_TOKEN=change-this
 MATTERMOST_BASE_URL=https://mattermost.example.com
 MATTERMOST_BOT_TOKEN=change-this
@@ -118,6 +119,8 @@ EOF
 chown root:www-data /srv/agentag/app/.env.local
 chmod 0640 /srv/agentag/app/.env.local
 ```
+
+The worker passes `GITHUB_PAT_TOKEN` to each Codex CLI process. Keep it in `.env.local`; systemd workers do not source `/root/.bashrc`.
 
 Install PHP dependencies. Disable Composer auto-scripts here so `cache:clear` is not run as root and does not create a root-owned Symfony cache.
 
@@ -214,17 +217,17 @@ systemctl enable --now nginx
 systemctl restart nginx
 systemctl disable --now agentag-worker || true
 systemctl enable --now agentag-ack-worker
-systemctl enable --now agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4
+systemctl enable --now agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4 agentag-worker@5 agentag-worker@6 agentag-worker@7 agentag-worker@8 agentag-worker@9 agentag-worker@10
 ```
 
-The web process creates the pending task card immediately. The dedicated preparation worker then runs the ephemeral Luna/medium model selector without waiting behind long jobs. The four `agentag-worker@N` instances execute tasks directly on the selected profile and allow four different chat threads to run at the same time. Adjust that number to match the VPS. AgentTag still serializes work inside one thread.
+The web process creates the pending task card immediately. The dedicated preparation worker then runs the ephemeral Luna/medium model selector without waiting behind long jobs. The ten `agentag-worker@N` instances execute tasks directly on the selected profile and allow ten different chat threads to run at the same time. Adjust that number to match the VPS. AgentTag still serializes work inside one thread.
 
 Check service state and HTTP endpoints:
 
 ```bash
 systemctl status php8.4-fpm --no-pager
 systemctl status nginx --no-pager
-systemctl status agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4 --no-pager
+systemctl status agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4 agentag-worker@5 agentag-worker@6 agentag-worker@7 agentag-worker@8 agentag-worker@9 agentag-worker@10 --no-pager
 systemctl status agentag-ack-worker --no-pager
 systemctl show agentag-worker@1 -p User -p Group -p Environment
 curl -i http://YOUR_DOMAIN_HERE/health
@@ -234,7 +237,7 @@ curl -i http://YOUR_DOMAIN_HERE/ready
 Check logs:
 
 ```bash
-journalctl -u agentag-ack-worker -u agentag-worker@1 -u agentag-worker@2 -u agentag-worker@3 -u agentag-worker@4 -f
+journalctl -u agentag-ack-worker -u agentag-worker@1 -u agentag-worker@2 -u agentag-worker@3 -u agentag-worker@4 -u agentag-worker@5 -u agentag-worker@6 -u agentag-worker@7 -u agentag-worker@8 -u agentag-worker@9 -u agentag-worker@10 -f
 tail -f /srv/agentag/app/var/log/prod.log
 tail -f /var/log/nginx/agentag.error.log
 tail -f /var/log/php8.4-fpm-agentag.slow.log
@@ -278,7 +281,7 @@ Restart services so PHP-FPM OPcache and the worker see the new code:
 ```bash
 systemctl restart php8.4-fpm
 systemctl restart agentag-ack-worker
-systemctl restart agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4
+systemctl restart agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4 agentag-worker@5 agentag-worker@6 agentag-worker@7 agentag-worker@8 agentag-worker@9 agentag-worker@10
 nginx -t && systemctl reload nginx
 ```
 

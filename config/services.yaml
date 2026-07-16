@@ -73,6 +73,10 @@ services:
     App\AgentTag\Runner\ProcessFactory:
         alias: App\AgentTag\Runner\SymfonyProcessFactory
 
+    App\AgentTag\Runner\SymfonyProcessFactory:
+        arguments:
+            $githubPatToken: '%env(string:GITHUB_PAT_TOKEN)%'
+
     App\AgentTag\Runner\AgentRunnerInterface:
         alias: App\AgentTag\Runner\CodexCliRunner
 

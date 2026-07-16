@@ -51,11 +51,14 @@ AGENTAG_MAX_RETRIES=2
 AGENTAG_RETRY_DELAY_SECONDS=60
 AGENTAG_NOTIFICATION_PREFERENCE=milestones
 
+GITHUB_PAT_TOKEN=github_pat_change_this
 MATTERMOST_WEBHOOK_TOKEN=change-this
 MATTERMOST_BASE_URL=https://mattermost.example.com
 MATTERMOST_BOT_TOKEN=change-this
 MATTERMOST_RECENT_REPLY_LIMIT=20
 ```
+
+`GITHUB_PAT_TOKEN` is passed to every Codex CLI process so GitHub MCP servers can authenticate. Define it in `.env.local`; non-interactive workers do not load shell startup files such as `.bashrc`.
 
 `DEFAULT_URI` must be the public AgentTag origin. Mattermost uses it to call `/integrations/mattermost/action` when a user clicks a task-card button. If AgentTag is on a private address, allow that address in Mattermost’s `AllowedUntrustedInternalConnections` setting.
 
