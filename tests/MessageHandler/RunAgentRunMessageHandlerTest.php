@@ -125,6 +125,7 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         self::assertSame('Fix and watch CI', $run->title());
         self::assertSame('Workspace ready', $run->acknowledgement());
         self::assertSame('sol-xhigh', $run->modelSelection()->route);
+        self::assertSame('sol-xhigh', $run->session()->modelSelection()?->route);
         self::assertSame('task-post', $run->taskPostId());
         self::assertSame([], $notifier->createdMessages);
         self::assertCount(1, $notifier->updatedMessages);
@@ -132,6 +133,32 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         self::assertStringContainsString('Model selected. Starting the task.', $notifier->updatedMessages[0]);
         self::assertStringContainsString('Model: **GPT-5.6 Sol · xhigh**', $notifier->updatedMessages[0]);
         self::assertStringContainsString('Contained feature with several interacting changes.', $notifier->updatedMessages[0]);
+        self::assertSame([(int) $run->id()], $bus->runIds);
+    }
+
+    public function testPreparationReusesAnExistingSessionModelWithoutSelectingAgain(): void
+    {
+        $entityManager = $this->entityManager();
+        $run = $this->persistRun($entityManager);
+        $selection = TaskModelSelection::fromRoute('sol-medium', 'Selected by the first request in this thread.')
+            ?? throw new \LogicException('Expected a valid test model selection.');
+        $run->session()->selectModel($selection);
+        $entityManager->flush();
+        $renderer = static::getContainer()->get(TaskCardRenderer::class);
+        self::assertInstanceOf(TaskCardRenderer::class, $renderer);
+        $bus = new DelayedTraceableMessageBus();
+        $handler = new PrepareAgentTaskMessageHandler(
+            $entityManager,
+            new FailingTaskModelSelector(),
+            $renderer,
+            new DurableTraceableNotifier(),
+            new MattermostRunProgressSinkFactory(new DurableTraceableNotifier(), $renderer, $entityManager),
+            $bus,
+        );
+
+        $handler(new PrepareAgentTaskMessage((int) $run->id()));
+
+        self::assertSame('sol-medium', $run->modelSelection()->route);
         self::assertSame([(int) $run->id()], $bus->runIds);
     }
 
@@ -283,5 +310,14 @@ final readonly class DurableTaskModelSelector implements TaskModelSelector
     {
         return TaskModelSelection::fromRoute('sol-xhigh', 'Contained feature with several interacting changes.')
             ?? throw new \LogicException('Expected a valid test model selection.');
+    }
+}
+
+final readonly class FailingTaskModelSelector implements TaskModelSelector
+{
+    #[\Override]
+    public function select(string $request): TaskModelSelection
+    {
+        throw new \LogicException('Model selection must not run again for an existing session.');
     }
 }

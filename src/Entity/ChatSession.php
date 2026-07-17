@@ -2,6 +2,7 @@
 
 namespace App\Entity;
 
+use App\AgentTag\Runner\TaskModelSelection;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
@@ -19,6 +20,12 @@ class ChatSession
     /** @var Collection<int, AgentRun> */
     #[ORM\OneToMany(targetEntity: AgentRun::class, mappedBy: 'session')]
     private Collection $runs;
+
+    #[ORM\Column(length: 32, nullable: true)]
+    private ?string $modelRoute = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $modelSelectionReason = null;
 
     public function __construct(
         #[ORM\Column(length: 255)]
@@ -72,6 +79,11 @@ class ChatSession
         return $this->workspacePath;
     }
 
+    public function modelSelection(): ?TaskModelSelection
+    {
+        return TaskModelSelection::fromRoute($this->modelRoute ?? '', $this->modelSelectionReason ?? '');
+    }
+
     /** @return Collection<int, AgentRun> */
     public function runs(): Collection
     {
@@ -86,6 +98,16 @@ class ChatSession
     public function assignWorkspacePath(string $workspacePath): void
     {
         $this->workspacePath = $workspacePath;
+    }
+
+    public function selectModel(TaskModelSelection $modelSelection): void
+    {
+        if (null !== $this->modelSelection()) {
+            return;
+        }
+
+        $this->modelRoute = $modelSelection->route;
+        $this->modelSelectionReason = $modelSelection->reason;
     }
 
     public function inputTokens(): int

@@ -4,6 +4,7 @@ namespace App\Tests\AgentTag\Session;
 
 use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Chat\ChatSessionReference;
+use App\AgentTag\Runner\TaskModelSelection;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Session\ChatThreadContext;
 use App\AgentTag\Session\ChatThreadMessage;
@@ -76,6 +77,35 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         self::assertStringContainsString('Prior run summaries:', (string) $runs[1]->contextSnapshot());
         self::assertStringContainsString('first input token=[REDACTED]', (string) $runs[1]->contextSnapshot());
         self::assertStringContainsString('Bearer [REDACTED]', (string) $runs[1]->contextSnapshot());
+    }
+
+    public function testItReusesTheFirstSessionModelOnlyWithinTheSameThread(): void
+    {
+        $store = static::getContainer()->get(ChatSessionStore::class);
+        self::assertInstanceOf(ChatSessionStore::class, $store);
+        $agent = $this->agent();
+        $thread = new ChatSessionReference('team-id', 'channel-id', 'root-id');
+
+        $firstRun = $store->recordRun($thread, 'first request', new ChatThreadContext([]), $agent);
+        $selection = TaskModelSelection::fromRoute('sol-xhigh', 'Selected for the first request in this thread.')
+            ?? throw new \LogicException('Expected a valid test model selection.');
+        $firstRun->session()->selectModel($selection);
+        $firstRun->selectModel($selection);
+        $store->save($firstRun);
+
+        $followUp = $store->recordRun($thread, 'follow-up request', new ChatThreadContext([]), $agent);
+        $newThread = $store->recordRun(
+            new ChatSessionReference('team-id', 'channel-id', 'different-root-id'),
+            'new session request',
+            new ChatThreadContext([]),
+            $agent,
+        );
+
+        self::assertTrue($followUp->hasModelSelection());
+        self::assertSame('sol-xhigh', $followUp->modelSelection()->route);
+        self::assertSame('Selected for the first request in this thread.', $followUp->modelSelection()->reason);
+        self::assertFalse($newThread->hasModelSelection());
+        self::assertNull($newThread->session()->modelSelection());
     }
 
     private function agent(): \App\AgentTag\Agent\AgentProfile

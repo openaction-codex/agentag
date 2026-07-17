@@ -86,6 +86,10 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
             null === $requesterId ? null : $this->redactor->redact($requesterId),
             $this->redactor->redact($workspacePath),
         );
+        $modelSelection = $session->modelSelection();
+        if (null !== $modelSelection) {
+            $run->selectModel($modelSelection);
+        }
         $this->entityManager->persist($run);
         $this->entityManager->flush();
 

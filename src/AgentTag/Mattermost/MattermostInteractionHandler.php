@@ -100,7 +100,15 @@ final readonly class MattermostInteractionHandler
                 $this->settings->retryDelaySeconds(),
                 $this->notificationPreference($event->text()),
             );
-            $run->acknowledgeTask('Request received', 'Request received. Deciding which model to use.');
+            if ($run->hasModelSelection()) {
+                $run->presentTask(
+                    'Request received',
+                    'Request received. Continuing with the model selected for this session.',
+                    $run->modelSelection(),
+                );
+            } else {
+                $run->acknowledgeTask('Request received', 'Request received. Deciding which model to use.');
+            }
             $this->sessionStore->save($run);
 
             $card = $this->taskCardRenderer->render($run);
@@ -124,7 +132,9 @@ final readonly class MattermostInteractionHandler
         if (null === $runId) {
             throw new \LogicException('Recorded Mattermost tasks must have an id before preparation.');
         }
-        $this->messageBus->dispatch(new PrepareAgentTaskMessage($runId));
+        $this->messageBus->dispatch($run->hasModelSelection()
+            ? new RunAgentRunMessage($runId)
+            : new PrepareAgentTaskMessage($runId));
 
         return MattermostInteractionResult::handled('');
     }

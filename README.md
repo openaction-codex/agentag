@@ -109,6 +109,8 @@ Examples:
 
 While a task is running or waiting, a new mentioned message becomes steering for that same task rather than a replacement run. Stop interrupts a running command or immediately stops a task queued for retry, and preserves the workspace for 24 hours. Retry and resume remain available as explicit chat commands. Raw command events never appear in the status card.
 
+The first request in a Mattermost thread selects the model route for that session. Follow-up requests in the same thread reuse that route without running model selection again; a request in a new thread starts a new session and selects its own route.
+
 Codex can keep a task alive by ending a stage with this private protocol (the comment is removed before display):
 
 ```html

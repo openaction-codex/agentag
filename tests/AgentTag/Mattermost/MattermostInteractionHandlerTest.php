@@ -15,6 +15,7 @@ use App\AgentTag\Mattermost\MattermostSessionMapper;
 use App\AgentTag\Mattermost\MattermostThreadContextProvider;
 use App\AgentTag\Mattermost\TaskCardRenderer;
 use App\AgentTag\Run\RunInterrupter;
+use App\AgentTag\Runner\TaskModelSelection;
 use App\AgentTag\Session\ChatSessionStore;
 use App\AgentTag\Session\ChatThreadContext;
 use App\AgentTag\Session\ChatThreadMessage;
@@ -52,6 +53,24 @@ final class MattermostInteractionHandlerTest extends TestCase
         self::assertInstanceOf(AgentRun::class, $savedRun);
         self::assertSame('task-post-1', $savedRun->taskPostId());
         self::assertSame(['mattermost:team:channel:post'], $store->sessionKeys);
+    }
+
+    public function testItReusesTheSessionModelAndSkipsSelectionForAFollowUp(): void
+    {
+        $notifier = new TraceableMattermostNotifier();
+        $store = new TraceableChatSessionStore();
+        $store->modelSelection = TaskModelSelection::fromRoute('sol-xhigh', 'Selected for the first request in this thread.');
+        $bus = new TraceableMessageBus();
+        $handler = $this->handler($notifier, $store, $bus, new TraceableRunInterrupter());
+
+        $handler->handle($this->event('@Codex now add the regression test'));
+
+        self::assertSame([], $bus->preparationRunIds);
+        self::assertSame([1], $bus->runIds);
+        self::assertCount(1, $notifier->createdPosts);
+        self::assertStringContainsString('Model: **GPT-5.6 Sol · xhigh**', $notifier->createdPosts[0]);
+        self::assertStringContainsString('Continuing with the model selected for this session.', $notifier->createdPosts[0]);
+        self::assertSame('sol-xhigh', $store->savedRuns[0]->modelSelection()->route);
     }
 
     public function testItTreatsANewerMessageAsSteeringForTheSameActiveTask(): void
@@ -147,12 +166,18 @@ final class TraceableChatSessionStore implements ChatSessionStore
     public array $sessionKeys = [];
     /** @var list<AgentRun> */
     public array $savedRuns = [];
+    public ?TaskModelSelection $modelSelection = null;
 
     #[\Override]
     public function recordRun(ChatSessionReference $reference, string $inputSummary, ChatThreadContext $threadContext, AgentProfile $agent, ?string $sourceEventId = null, ?string $requesterId = null): AgentRun
     {
         $this->sessionKeys[] = $reference->key();
-        $run = new AgentRun(new ChatSession($reference->key(), $reference->teamId(), $reference->channelId(), $reference->threadId(), new \DateTimeImmutable(), workspacePath: '/tmp/workspace'), AgentRun::STATUS_ACCEPTED, new \DateTimeImmutable(), workspacePath: '/tmp/workspace');
+        $session = new ChatSession($reference->key(), $reference->teamId(), $reference->channelId(), $reference->threadId(), new \DateTimeImmutable(), workspacePath: '/tmp/workspace');
+        $run = new AgentRun($session, AgentRun::STATUS_ACCEPTED, new \DateTimeImmutable(), workspacePath: '/tmp/workspace');
+        if (null !== $this->modelSelection) {
+            $session->selectModel($this->modelSelection);
+            $run->selectModel($this->modelSelection);
+        }
         (new \ReflectionProperty(AgentRun::class, 'id'))->setValue($run, count($this->sessionKeys));
 
         return $run;

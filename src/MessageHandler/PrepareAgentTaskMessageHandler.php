@@ -47,7 +47,10 @@ final readonly class PrepareAgentTaskMessageHandler
             throw new \RuntimeException(sprintf('Task #%d has no workspace.', $message->runId()));
         }
 
-        $run->selectModel($this->modelSelector->select($run->inputSummary() ?? 'Handle the Mattermost request.'));
+        $modelSelection = $run->session()->modelSelection()
+            ?? $this->modelSelector->select($run->inputSummary() ?? 'Handle the Mattermost request.');
+        $run->session()->selectModel($modelSelection);
+        $run->selectModel($modelSelection);
         $card = $this->renderer->render($run);
         if (null === $run->taskPostId()) {
             $postId = $this->notifier->createPost($this->progressSinkFactory->eventFor($run), $card->message, $card->props);
