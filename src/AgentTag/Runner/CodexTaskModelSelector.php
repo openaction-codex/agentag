@@ -66,7 +66,7 @@ PROMPT;
                 '--skip-git-repo-check',
                 '--sandbox', 'read-only',
                 '--model', $this->settings->modelSelectionModel(),
-                '-c', 'model_reasoning_effort="medium"',
+                '-c', 'model_reasoning_effort="low"',
                 '--output-schema', $schemaPath,
                 '--output-last-message', $outputPath,
                 '-',

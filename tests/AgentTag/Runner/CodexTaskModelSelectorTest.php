@@ -10,7 +10,7 @@ use PHPUnit\Framework\TestCase;
 
 final class CodexTaskModelSelectorTest extends TestCase
 {
-    public function testItUsesEphemeralLunaMediumAndAConstrainedOutputSchema(): void
+    public function testItUsesEphemeralLunaLowAndAConstrainedOutputSchema(): void
     {
         $factory = new ModelSelectionProcessFactory('{"route":"terra-high","selection_reason":"Precise, verifiable bug fix."}');
         $selector = new CodexTaskModelSelector($factory, new AgentTagSettings('@Codex', '/tmp', modelSelectionModel: 'gpt-5.6-luna'));
@@ -22,7 +22,7 @@ final class CodexTaskModelSelectorTest extends TestCase
         self::assertSame('high', $selection->effort);
         self::assertSame('Precise, verifiable bug fix.', $selection->reason);
         self::assertContains('gpt-5.6-luna', $factory->command);
-        self::assertContains('model_reasoning_effort="medium"', $factory->command);
+        self::assertContains('model_reasoning_effort="low"', $factory->command);
         self::assertContains('--ephemeral', $factory->command);
         self::assertContains('--output-schema', $factory->command);
         $schema = json_decode($factory->schema, true, flags: \JSON_THROW_ON_ERROR);

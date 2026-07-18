@@ -220,7 +220,7 @@ systemctl enable --now agentag-ack-worker
 systemctl enable --now agentag-worker@1 agentag-worker@2 agentag-worker@3 agentag-worker@4 agentag-worker@5 agentag-worker@6
 ```
 
-The web process creates the pending task card immediately. The dedicated preparation worker then runs the ephemeral Luna/medium model selector without waiting behind long jobs. The six `agentag-worker@N` instances execute tasks directly on the selected profile and allow six different chat threads to run at the same time. Adjust that number to match the VPS. AgentTag still serializes work inside one thread.
+The web process creates the pending task card immediately. The dedicated preparation worker then runs the ephemeral Luna/low model selector without waiting behind long jobs. The six `agentag-worker@N` instances execute tasks directly on the selected profile and allow six different chat threads to run at the same time. Adjust that number to match the VPS. AgentTag still serializes work inside one thread.
 
 Check service state and HTTP endpoints:
 
