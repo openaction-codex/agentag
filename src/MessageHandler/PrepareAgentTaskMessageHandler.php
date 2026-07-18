@@ -6,6 +6,7 @@ use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostRunProgressSinkFactory;
 use App\AgentTag\Mattermost\TaskCardRenderer;
 use App\AgentTag\Runner\TaskModelSelector;
+use App\AgentTag\Session\SessionModelSelectionResolver;
 use App\Entity\AgentRun;
 use App\Message\PrepareAgentTaskMessage;
 use App\Message\RunAgentRunMessage;
@@ -18,6 +19,7 @@ final readonly class PrepareAgentTaskMessageHandler
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
+        private SessionModelSelectionResolver $modelSelectionResolver,
         private TaskModelSelector $modelSelector,
         private TaskCardRenderer $renderer,
         private MattermostNotifier $notifier,
@@ -47,7 +49,7 @@ final readonly class PrepareAgentTaskMessageHandler
             throw new \RuntimeException(sprintf('Task #%d has no workspace.', $message->runId()));
         }
 
-        $modelSelection = $run->session()->modelSelection()
+        $modelSelection = $this->modelSelectionResolver->resolve($run->session(), $run)
             ?? $this->modelSelector->select($run->inputSummary() ?? 'Handle the Mattermost request.');
         $run->session()->selectModel($modelSelection);
         $run->selectModel($modelSelection);

@@ -585,6 +585,11 @@ class AgentRun
         return self::STATUS_INTERRUPT_REQUESTED === $this->status;
     }
 
+    public function cancellationRequested(): bool
+    {
+        return self::INTERRUPT_CANCEL === $this->interruptionKind;
+    }
+
     public function deadlineExceeded(?\DateTimeImmutable $now = null): bool
     {
         return null !== $this->deadlineAt && $this->deadlineAt <= ($now ?? new \DateTimeImmutable());

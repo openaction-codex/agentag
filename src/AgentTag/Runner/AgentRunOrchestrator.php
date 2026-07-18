@@ -166,11 +166,14 @@ final readonly class AgentRunOrchestrator
     {
         $this->entityManager->refresh($run);
 
-        return $run->interruptionRequested();
+        return $run->interruptionRequested() || $run->cancellationRequested();
     }
 
     private function resultStatus(AgentRun $run, AgentRunnerResult $result): string
     {
+        if ($run->cancellationRequested()) {
+            return AgentRun::STATUS_INTERRUPTED;
+        }
         if ($run->interruptionRequested()) {
             return AgentRun::INTERRUPT_STEER === $run->interruptionKind()
                 ? AgentRun::STATUS_ACCEPTED

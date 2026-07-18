@@ -13,6 +13,7 @@ use App\AgentTag\Mattermost\MattermostInteractionHandler;
 use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostSessionMapper;
 use App\AgentTag\Mattermost\MattermostThreadContextProvider;
+use App\AgentTag\Mattermost\MattermostThreadRootResolver;
 use App\AgentTag\Mattermost\TaskCardRenderer;
 use App\AgentTag\Run\RunInterrupter;
 use App\AgentTag\Runner\TaskModelSelection;
@@ -125,7 +126,13 @@ final class MattermostInteractionHandlerTest extends TestCase
 
         return new MattermostInteractionHandler(
             new ConfiguredTagMentionDetector($settings),
-            new MattermostSessionMapper(),
+            new MattermostSessionMapper(new class implements MattermostThreadRootResolver {
+                #[\Override]
+                public function rootIdFor(MattermostInboundEvent $event): string
+                {
+                    return '' !== $event->rootId() ? $event->rootId() : $event->postId();
+                }
+            }),
             new TestInboundEventIdempotencyStore(),
             $notifier,
             $store,

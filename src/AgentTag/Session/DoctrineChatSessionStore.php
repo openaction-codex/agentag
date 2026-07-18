@@ -20,6 +20,7 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
         private SensitiveTextRedactor $redactor,
         private WorkspaceLayout $workspaceLayout,
         private WorkspaceTemplateCopier $workspaceTemplateCopier,
+        private SessionModelSelectionResolver $modelSelectionResolver,
         private LoggerInterface $logger,
     ) {
     }
@@ -86,7 +87,7 @@ final readonly class DoctrineChatSessionStore implements ChatSessionStore
             null === $requesterId ? null : $this->redactor->redact($requesterId),
             $this->redactor->redact($workspacePath),
         );
-        $modelSelection = $session->modelSelection();
+        $modelSelection = $this->modelSelectionResolver->resolve($session);
         if (null !== $modelSelection) {
             $run->selectModel($modelSelection);
         }

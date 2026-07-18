@@ -92,3 +92,6 @@ services:
 
     App\AgentTag\Mattermost\MattermostThreadContextProvider:
         alias: App\AgentTag\Mattermost\MattermostApiThreadContextProvider
+
+    App\AgentTag\Mattermost\MattermostThreadRootResolver:
+        alias: App\AgentTag\Mattermost\MattermostApiThreadRootResolver

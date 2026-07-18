@@ -99,6 +99,31 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         self::assertSame('xhigh', $fakeRunner->input->reasoningEffort());
     }
 
+    public function testCancellationCannotBeOverwrittenByAConcurrentSuccessfulResult(): void
+    {
+        $entityManager = static::getContainer()->get(EntityManagerInterface::class);
+        self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
+        $session = new ChatSession('mattermost:team:channel:cancel', 'team', 'channel', 'cancel', new \DateTimeImmutable());
+        $run = new AgentRun($session, AgentRun::STATUS_ACCEPTED, new \DateTimeImmutable(), workspacePath: $this->workspaceDirectory.'/cancel');
+        $run->presentTask('Cancelable task', 'Workspace ready', TaskModelSelection::fromRoute('sol-medium', 'Test route.'));
+        $entityManager->persist($session);
+        $entityManager->persist($run);
+        $entityManager->flush();
+        $runner = new CancellingAgentRunner($run, $entityManager);
+        $orchestrator = new AgentRunOrchestrator(
+            $runner,
+            new WorkspaceLayout($this->workspaceDirectory.'/workspace'),
+            new SensitiveTextRedactor(),
+            $entityManager,
+        );
+
+        $orchestrator->run($run, 'run-cancel', 'Do work.', 'codex-full-access', 120);
+
+        self::assertTrue($runner->observedCancellation);
+        self::assertSame(AgentRun::STATUS_INTERRUPTED, $run->status());
+        self::assertSame(130, $run->exitCode());
+    }
+
     private function removeDirectory(string $path): void
     {
         if (!is_dir($path)) {
@@ -134,5 +159,27 @@ final class FakeAgentRunner implements AgentRunnerInterface
             [new AgentArtifact('/tmp/artifact.txt', 'artifact')],
             new TokenUsage(10, 5),
         );
+    }
+}
+
+final class CancellingAgentRunner implements AgentRunnerInterface
+{
+    public bool $observedCancellation;
+
+    public function __construct(
+        private readonly AgentRun $run,
+        private readonly EntityManagerInterface $entityManager,
+    ) {
+        $this->observedCancellation = false;
+    }
+
+    #[\Override]
+    public function run(AgentRunnerInput $input): AgentRunnerResult
+    {
+        $this->run->requestCancellation();
+        $this->entityManager->flush();
+        $this->observedCancellation = $input->interruptionRequested();
+
+        return new AgentRunnerResult(0, 'A duplicate runner finished successfully.', '', '', [], null);
     }
 }

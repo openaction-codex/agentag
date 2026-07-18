@@ -89,7 +89,6 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         $firstRun = $store->recordRun($thread, 'first request', new ChatThreadContext([]), $agent);
         $selection = TaskModelSelection::fromRoute('sol-xhigh', 'Selected for the first request in this thread.')
             ?? throw new \LogicException('Expected a valid test model selection.');
-        $firstRun->session()->selectModel($selection);
         $firstRun->selectModel($selection);
         $store->save($firstRun);
 
@@ -104,6 +103,7 @@ final class DoctrineChatSessionStoreTest extends KernelTestCase
         self::assertTrue($followUp->hasModelSelection());
         self::assertSame('sol-xhigh', $followUp->modelSelection()->route);
         self::assertSame('Selected for the first request in this thread.', $followUp->modelSelection()->reason);
+        self::assertSame('sol-xhigh', $followUp->session()->modelSelection()?->route);
         self::assertFalse($newThread->hasModelSelection());
         self::assertNull($newThread->session()->modelSelection());
     }

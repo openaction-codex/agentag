@@ -5,6 +5,7 @@ namespace App\MessageHandler;
 use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Mattermost\MattermostRunProgressSink;
 use App\AgentTag\Mattermost\MattermostRunProgressSinkFactory;
+use App\AgentTag\Run\AgentRunExecutionLock;
 use App\AgentTag\Run\AgentRunTurnGate;
 use App\AgentTag\Runner\AgentRunOrchestrator;
 use App\AgentTag\Runner\AgentRunPromptBuilder;
@@ -12,6 +13,7 @@ use App\Entity\AgentRun;
 use App\Message\RunAgentRunMessage;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
+use Symfony\Component\Messenger\Exception\RecoverableMessageHandlingException;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\DelayStamp;
 
@@ -26,10 +28,25 @@ final readonly class RunAgentRunMessageHandler
         private MattermostRunProgressSinkFactory $mattermostProgressSinkFactory,
         private AgentRunTurnGate $turnGate,
         private MessageBusInterface $messageBus,
+        private AgentRunExecutionLock $executionLock,
     ) {
     }
 
     public function __invoke(RunAgentRunMessage $message): void
+    {
+        $lease = $this->executionLock->acquire($message->runId());
+        if (null === $lease) {
+            throw new RecoverableMessageHandlingException(sprintf('Run #%d is already executing in another worker.', $message->runId()), retryDelay: 5000);
+        }
+
+        try {
+            $this->run($message);
+        } finally {
+            $lease->release();
+        }
+    }
+
+    private function run(RunAgentRunMessage $message): void
     {
         $run = $this->entityManager->getRepository(AgentRun::class)->find($message->runId());
         if (!$run instanceof AgentRun) {

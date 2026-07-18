@@ -8,6 +8,7 @@ use App\AgentTag\Mattermost\MattermostInboundEvent;
 use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostRunProgressSinkFactory;
 use App\AgentTag\Mattermost\TaskCardRenderer;
+use App\AgentTag\Run\AgentRunExecutionLock;
 use App\AgentTag\Run\AgentRunTurnGate;
 use App\AgentTag\Run\RunEventRecorder;
 use App\AgentTag\Runner\AgentRunnerInput;
@@ -19,6 +20,7 @@ use App\AgentTag\Runner\TaskContinuation;
 use App\AgentTag\Runner\TaskModelSelection;
 use App\AgentTag\Runner\TaskModelSelector;
 use App\AgentTag\Security\SensitiveTextRedactor;
+use App\AgentTag\Session\SessionModelSelectionResolver;
 use App\AgentTag\Workspace\WorkspaceLayout;
 use App\Entity\AgentRun;
 use App\Entity\ChatSession;
@@ -88,6 +90,7 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
             new MattermostRunProgressSinkFactory($notifier, $renderer, $entityManager, $recorder),
             new AgentRunTurnGate($entityManager),
             $bus,
+            new AgentRunExecutionLock(),
         );
 
         $handler(new RunAgentRunMessage((int) $run->id()));
@@ -113,6 +116,7 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         $factory = new MattermostRunProgressSinkFactory($notifier, $renderer, $entityManager);
         $handler = new PrepareAgentTaskMessageHandler(
             $entityManager,
+            new SessionModelSelectionResolver($entityManager),
             new DurableTaskModelSelector(),
             $renderer,
             $notifier,
@@ -149,6 +153,7 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         $bus = new DelayedTraceableMessageBus();
         $handler = new PrepareAgentTaskMessageHandler(
             $entityManager,
+            new SessionModelSelectionResolver($entityManager),
             new FailingTaskModelSelector(),
             $renderer,
             new DurableTraceableNotifier(),
@@ -181,6 +186,7 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
             new MattermostRunProgressSinkFactory(new DurableTraceableNotifier(), $renderer, $entityManager, $recorder),
             new AgentRunTurnGate($entityManager),
             new DelayedTraceableMessageBus(),
+            new AgentRunExecutionLock(),
         );
 
         $handler(new RunAgentRunMessage((int) $run->id()));
