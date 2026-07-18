@@ -12,15 +12,15 @@ final class CodexTaskModelSelectorTest extends TestCase
 {
     public function testItUsesEphemeralLunaMediumAndAConstrainedOutputSchema(): void
     {
-        $factory = new ModelSelectionProcessFactory('{"route":"sol-xhigh","selection_reason":"Coding task requiring implementation."}');
+        $factory = new ModelSelectionProcessFactory('{"route":"terra-high","selection_reason":"Precise, verifiable bug fix."}');
         $selector = new CodexTaskModelSelector($factory, new AgentTagSettings('@Codex', '/tmp', modelSelectionModel: 'gpt-5.6-luna'));
 
         $selection = $selector->select('@Codex implement the billing fix');
 
-        self::assertSame('sol-xhigh', $selection->route);
-        self::assertSame('gpt-5.6-sol', $selection->model);
-        self::assertSame('xhigh', $selection->effort);
-        self::assertSame('Coding task requiring implementation.', $selection->reason);
+        self::assertSame('terra-high', $selection->route);
+        self::assertSame('gpt-5.6-terra', $selection->model);
+        self::assertSame('high', $selection->effort);
+        self::assertSame('Precise, verifiable bug fix.', $selection->reason);
         self::assertContains('gpt-5.6-luna', $factory->command);
         self::assertContains('model_reasoning_effort="medium"', $factory->command);
         self::assertContains('--ephemeral', $factory->command);
@@ -31,16 +31,65 @@ final class CodexTaskModelSelectorTest extends TestCase
         self::assertIsArray($properties);
         $route = $properties['route'] ?? null;
         self::assertIsArray($route);
-        self::assertSame(['luna-low', 'luna-max', 'sol-medium', 'sol-xhigh'], $route['enum'] ?? null);
-        self::assertStringContainsString("stop, cancel, or interrupt the agent's current work", $factory->input);
-        self::assertStringContainsString('current agent status or current MCP server status', $factory->input);
-        self::assertStringContainsString('functional testing of a PR (PR functional validation)', $factory->input);
-        self::assertStringContainsString('writing a technical specification', $factory->input);
-        self::assertStringContainsString('every remaining coding task', $factory->input);
-        self::assertStringContainsString('every remaining simple, routine task that does not require long context', $factory->input);
-        self::assertStringContainsString('product questions, implementation questions, general questions, classification, extraction, short summarization, status updates, and other simple MCP reads', $factory->input);
-        self::assertStringContainsString('every remaining non-coding task', $factory->input);
-        self::assertStringContainsString('long context, broad synthesis, deeper judgment, or consequential recommendations', $factory->input);
+        self::assertSame([
+            'luna-low',
+            'luna-medium',
+            'luna-max',
+            'terra-medium',
+            'terra-high',
+            'terra-xhigh',
+            'terra-max',
+            'sol-medium',
+            'sol-xhigh',
+        ], $route['enum'] ?? null);
+        self::assertStringContainsString('Minimize quota usage while preserving correctness, judgment, and completeness.', $factory->input);
+        self::assertStringContainsString('Honor an explicit request for a model or route.', $factory->input);
+        self::assertStringContainsString('health/model/skills check, or simple confirmation: luna-low.', $factory->input);
+        self::assertStringContainsString('Linear listing/status/assignment/labels/comments or simple writing: luna-medium.', $factory->input);
+        self::assertStringContainsString('Narrow product question or isolated UI smoke test: luna-max.', $factory->input);
+        self::assertStringContainsString('Codebase investigation or routine production diagnosis: terra-high.', $factory->input);
+        self::assertStringContainsString('Technical specification (`$specify-issue`): terra-xhigh', $factory->input);
+        self::assertStringContainsString('Functional PR validation (`$validate-pr`): terra-high', $factory->input);
+        self::assertStringContainsString('Routine PR review: terra-xhigh', $factory->input);
+        self::assertStringContainsString('Clear bug fix or small feature with a precise issue/spec: terra-high', $factory->input);
+        self::assertStringContainsString('Objectively verifiable coding without important unknowns', $factory->input);
+        self::assertStringContainsString('Rebase, backport, or fork sync: terra-max', $factory->input);
+        self::assertStringContainsString('Sales/account research: terra-medium', $factory->input);
+        self::assertStringContainsString('Routine, reversible system operations: terra-high; terra-xhigh for production writes', $factory->input);
+        self::assertStringContainsString('Use sol-xhigh only when exceptional complexity, scope, uncertainty, and consequences occur together.', $factory->input);
+        self::assertStringContainsString('Tests, review, CI, and PR creation are normal workflow steps and do not alone justify Sol.', $factory->input);
+        self::assertStringContainsString('Strong verification justifies Terra only when it covers the risky behavior.', $factory->input);
+        self::assertStringContainsString('If uncertain, use terra-xhigh for ordinary coding and sol-medium for sensitive or genuinely unknown work.', $factory->input);
+        self::assertStringContainsString('A cheaper model must request Sol escalation before risky changes', $factory->input);
+    }
+
+    public function testItSupportsEveryRoutingProfile(): void
+    {
+        $profiles = [
+            'luna-low' => ['gpt-5.6-luna', 'low'],
+            'luna-medium' => ['gpt-5.6-luna', 'medium'],
+            'luna-max' => ['gpt-5.6-luna', 'max'],
+            'terra-medium' => ['gpt-5.6-terra', 'medium'],
+            'terra-high' => ['gpt-5.6-terra', 'high'],
+            'terra-xhigh' => ['gpt-5.6-terra', 'xhigh'],
+            'terra-max' => ['gpt-5.6-terra', 'max'],
+            'sol-medium' => ['gpt-5.6-sol', 'medium'],
+            'sol-xhigh' => ['gpt-5.6-sol', 'xhigh'],
+        ];
+
+        foreach ($profiles as $route => [$model, $effort]) {
+            $factory = new ModelSelectionProcessFactory(json_encode([
+                'route' => $route,
+                'selection_reason' => 'Test selection.',
+            ], \JSON_THROW_ON_ERROR));
+            $selector = new CodexTaskModelSelector($factory, new AgentTagSettings('@Codex', '/tmp'));
+
+            $selection = $selector->select('route this request');
+
+            self::assertSame($route, $selection->route);
+            self::assertSame($model, $selection->model);
+            self::assertSame($effort, $selection->effort);
+        }
     }
 
     public function testItSupportsLunaLowForExtremelySimpleTasks(): void

@@ -22,14 +22,30 @@ final readonly class CodexTaskModelSelector implements TaskModelSelector
         $outputPath = sys_get_temp_dir().'/agentag-model-selection-'.$identifier.'.json';
         $schemaPath = sys_get_temp_dir().'/agentag-model-selection-schema-'.$identifier.'.json';
         $prompt = <<<'PROMPT'
-Choose the model that must execute the user request directly.
+You are a model router. Minimize quota usage while preserving correctness, judgment, and completeness. Route by actual scope, uncertainty, sensitivity, and verifiability, not merely by keywords such as "code" or "implement."
 
-Apply these rules in order:
-1. Choose luna-low only for an extremely simple request whose entire purpose is to stop, cancel, or interrupt the agent's current work, or to check the current agent status or current MCP server status.
-2. Choose sol-medium for functional testing of a PR (PR functional validation) and for writing a technical specification.
-3. Choose sol-xhigh for every remaining coding task, including implementation, code reviews, bug fixes, debugging, refactors, architecture, and implementation plans.
-4. Choose luna-max for every remaining simple, routine task that does not require long context. This includes product questions, implementation questions, general questions, classification, extraction, short summarization, status updates, and other simple MCP reads.
-5. Choose sol-medium for every remaining non-coding task, especially work requiring long context, broad synthesis, deeper judgment, or consequential recommendations.
+Honor an explicit request for a model or route. When only a model is requested, choose the appropriate effort for that model from the available routes.
+
+Routing:
+- Stop/cancel, ping, health/model/skills check, or simple confirmation: luna-low.
+- Linear listing/status/assignment/labels/comments or simple writing: luna-medium.
+- Narrow product question or isolated UI smoke test: luna-max.
+- Codebase investigation or routine production diagnosis: terra-high.
+- Technical specification (`$specify-issue`): terra-xhigh; sol-medium for security, architecture, major migrations, unresolved product decisions, or large scope.
+- Functional PR validation (`$validate-pr`): terra-high; luna-max for isolated UI smoke tests; sol-medium for security, concurrency, data integrity, multiple systems, or large scope.
+- Routine PR review: terra-xhigh; sol-medium for security, architecture, major migrations, concurrency, performance, unresolved decisions, or large scope.
+- Clear bug fix or small feature with a precise issue/spec: terra-high; sol-medium for security, data integrity, or large scope.
+- Objectively verifiable coding without important unknowns, including CI repair, explicit review feedback, fixtures, tests, mechanical refactoring, known validation rules, or small UI fixes: terra-high; luna-max if extremely small and isolated.
+- Rebase, backport, or fork sync: terra-max; sol-medium if conflicts require substantial semantic or architectural decisions.
+- Sales/account research: terra-medium; sol-medium for unusually deep strategic synthesis.
+- Routine, reversible system operations: terra-high; terra-xhigh for production writes; sol-medium for security incidents, destructive operations, or broad unknown-root-cause failures.
+- Other coding: terra-xhigh when bounded or strongly verifiable; sol-medium for architecture, multi-tenancy, complex UI/accessibility, concurrency, major performance/indexing work, migrations, sensitive logic, broad unknown-root-cause debugging, or large implementations. Use sol-xhigh only when exceptional complexity, scope, uncertainty, and consequences occur together.
+
+Rules:
+- Tests, review, CI, and PR creation are normal workflow steps and do not alone justify Sol.
+- Strong verification justifies Terra only when it covers the risky behavior.
+- If uncertain, use terra-xhigh for ordinary coding and sol-medium for sensitive or genuinely unknown work.
+- A cheaper model must request Sol escalation before risky changes if it discovers materially greater scope, sensitivity, or uncertainty.
 
 Return only the JSON object required by the output schema. Keep selection_reason concise and in the same language as the request when it is French or English.
 
@@ -86,7 +102,17 @@ PROMPT;
             'properties' => [
                 'route' => [
                     'type' => 'string',
-                    'enum' => ['luna-low', 'luna-max', 'sol-medium', 'sol-xhigh'],
+                    'enum' => [
+                        'luna-low',
+                        'luna-medium',
+                        'luna-max',
+                        'terra-medium',
+                        'terra-high',
+                        'terra-xhigh',
+                        'terra-max',
+                        'sol-medium',
+                        'sol-xhigh',
+                    ],
                 ],
                 'selection_reason' => ['type' => 'string'],
             ],

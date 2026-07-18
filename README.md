@@ -6,7 +6,7 @@ AgentTag is a self-hosted Symfony bot that delegates Mattermost threads to Codex
 
 - Accepts `@Codex` requests from a Mattermost outgoing webhook.
 - Immediately creates a Mattermost task card acknowledging receipt and showing that model selection is in progress.
-- Uses one ephemeral GPT-5.6 Luna call with medium reasoning and a JSON output schema to select Luna/low, Luna/max, Sol/medium, or Sol/xhigh.
+- Uses one ephemeral GPT-5.6 Luna call with medium reasoning and a JSON output schema to select an appropriate Luna, Terra, or Sol profile.
 - Creates one Mattermost task card and updates it instead of streaming commands or harness events.
 - Renders the entire evolving task card as one blockquote so the separately posted answer is visually distinct.
 - Shows one Stop button while work is active, keeps the completed step timeline, then posts the answer after it.
@@ -64,7 +64,7 @@ MATTERMOST_RECENT_REPLY_LIMIT=20
 
 `AGENTAG_NOTIFICATION_PREFERENCE` accepts `all`, `milestones`, or `completion`. Users can override it per task with phrases such as “notify me only when complete” or “notify me on every update.” A request can set a shorter deadline with “deadline in 3 hours” (minutes, hours, and days are supported).
 
-The webhook posts the initial task card before any Codex call. The preparation worker then calls Codex with `--ephemeral`, `gpt-5.6-luna`, medium reasoning, and `--output-schema`. PR functional validation and technical-specification writing use GPT-5.6 Sol/medium. Other coding work uses GPT-5.6 Sol/xhigh. Extremely simple requests to stop the agent's current work or check the current agent/MCP server status use GPT-5.6 Luna/low. Other simple routine work that does not require long context—including product or general questions, classification, extraction, short summaries, status updates, and simple MCP reads—uses GPT-5.6 Luna/max. Remaining non-coding work uses GPT-5.6 Sol/medium. If selection times out, fails, or returns an invalid route, AgentTag safely falls back to Sol/medium and still queues the task.
+The webhook posts the initial task card before any Codex call. The preparation worker then calls Codex with `--ephemeral`, `gpt-5.6-luna`, medium reasoning, and `--output-schema`. The router minimizes quota usage by sending simple work to Luna and bounded or strongly verifiable investigation, coding, research, and operations to Terra. Sol is reserved for sensitive, high-uncertainty, cross-system, or unusually large work, with Sol/xhigh used only when exceptional complexity and consequences coincide. Explicit model requests are honored. If selection times out, fails, or returns an invalid route, AgentTag safely falls back to Sol/medium and still queues the task.
 
 The selected model and reasoning effort are persisted on the run and passed directly to `codex exec` and `codex exec resume`; the task process does not delegate to another agent. The task card shows the selected profile and rationale before execution. The main task follows the workspace’s French-or-English response policy.
 
