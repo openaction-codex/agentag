@@ -25,19 +25,7 @@ final class CodexCliRunnerTest extends TestCase
     #[\Override]
     protected function tearDown(): void
     {
-        foreach (glob($this->artifactsDirectory.'/*') ?: [] as $file) {
-            if (is_file($file)) {
-                unlink($file);
-            }
-        }
-
-        if (is_dir($this->artifactsDirectory)) {
-            rmdir($this->artifactsDirectory);
-        }
-
-        if (is_dir($this->workingDirectory)) {
-            rmdir($this->workingDirectory);
-        }
+        $this->removeDirectory($this->workingDirectory);
     }
 
     public function testItRunsCodexExecInFullAccessMode(): void
@@ -72,7 +60,9 @@ final class CodexCliRunnerTest extends TestCase
         ], $factory->command);
         self::assertSame($this->workingDirectory, $factory->workingDirectory);
         self::assertSame(['CODEX_HOME' => '/tmp/codex-home'], $factory->environment);
-        self::assertSame('Implement the task.', $factory->input);
+        self::assertStringStartsWith("Implement the task.\n\nReply file attachments:\n", $factory->input);
+        self::assertStringContainsString($this->artifactsDirectory.'/reply-files', $factory->input);
+        self::assertStringContainsString('do not create a manifest', $factory->input);
         self::assertSame(300, $factory->timeoutSeconds);
         self::assertTrue($result->successful());
         self::assertSame('Final answer from Codex.', $result->finalMessage());
@@ -80,6 +70,32 @@ final class CodexCliRunnerTest extends TestCase
         self::assertNotNull($tokenUsage);
         self::assertSame(12, $tokenUsage->inputTokens());
         self::assertSame(8, $tokenUsage->outputTokens());
+    }
+
+    public function testItCollectsOnlyCompletedFilesFromTheReplyOutbox(): void
+    {
+        $factory = new TraceableProcessFactory();
+        $factory->replyFiles = [
+            'report.csv' => "name,value\nA,1\n",
+            'draft.part' => 'incomplete',
+        ];
+        $runner = new CodexCliRunner($factory);
+
+        $result = $runner->run(new AgentRunnerInput(
+            'Generate a report.',
+            $this->workingDirectory,
+            $this->artifactsDirectory,
+            [],
+            300,
+            'codex-full-access',
+        ));
+
+        self::assertCount(1, $result->artifacts());
+        $artifact = $result->artifacts()[0];
+        self::assertSame($this->artifactsDirectory.'/reply-files/report.csv', $artifact->path());
+        self::assertSame('report.csv', $artifact->label());
+        self::assertSame(15, $artifact->size());
+        self::assertSame(hash('sha256', "name,value\nA,1\n"), $artifact->sha256());
     }
 
     public function testItFallsBackToTheLastAgentMessageWhenTheLastMessageFileIsMissing(): void
@@ -225,6 +241,23 @@ final class CodexCliRunnerTest extends TestCase
         self::assertSame(300, $result->continuation()->delaySeconds());
         self::assertSame('Waiting for CI', $result->continuation()->reason());
     }
+
+    private function removeDirectory(string $path): void
+    {
+        if (!is_dir($path)) {
+            return;
+        }
+
+        foreach (glob($path.'/{,.}*', \GLOB_BRACE) ?: [] as $entry) {
+            if (in_array(basename($entry), ['.', '..'], true)) {
+                continue;
+            }
+
+            is_dir($entry) && !is_link($entry) ? $this->removeDirectory($entry) : unlink($entry);
+        }
+
+        rmdir($path);
+    }
 }
 
 final class TraceableProcessFactory implements ProcessFactory
@@ -255,6 +288,9 @@ final class TraceableProcessFactory implements ProcessFactory
 
     public string $callbackOutput = "{\"type\":\"agent_message\",\"message\":\"Working on it.\"}\n";
 
+    /** @var array<string, string> */
+    public array $replyFiles = [];
+
     #[\Override]
     public function create(array $command, string $workingDirectory, array $environment, string $input, int $timeoutSeconds): RunnerProcess
     {
@@ -270,6 +306,7 @@ final class TraceableProcessFactory implements ProcessFactory
             $this->lastMessage,
             $this->stdout,
             $this->callbackOutput,
+            $this->replyFiles,
         );
 
         return $this->process;
@@ -293,6 +330,8 @@ final class FakeRunnerProcess implements RunnerProcess
         private string $lastMessage,
         private string $stdout,
         private string $callbackOutput,
+        /** @var array<string, string> */
+        private array $replyFiles,
     ) {
     }
 
@@ -313,6 +352,12 @@ final class FakeRunnerProcess implements RunnerProcess
         $outputPathIndex = array_search('--output-last-message', $this->command, true);
         if ($this->writeLastMessage && is_int($outputPathIndex)) {
             file_put_contents($this->command[$outputPathIndex + 1], $this->lastMessage);
+        }
+        if (is_int($outputPathIndex)) {
+            $replyDirectory = dirname($this->command[$outputPathIndex + 1]).'/reply-files';
+            foreach ($this->replyFiles as $name => $contents) {
+                file_put_contents($replyDirectory.'/'.$name, $contents);
+            }
         }
         if (null !== $callback) {
             $callback('out', $this->callbackOutput);

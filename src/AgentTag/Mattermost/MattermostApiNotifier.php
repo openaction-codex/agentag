@@ -66,9 +66,58 @@ final class MattermostApiNotifier implements MattermostNotifier
         $this->createPost($event, $message);
     }
 
-    /** @param array<string, mixed> $props */
     #[\Override]
-    public function createPost(MattermostInboundEvent $event, string $message, array $props = []): ?string
+    public function uploadFile(MattermostInboundEvent $event, string $path): ?string
+    {
+        if (!$this->settings->enabled() || !is_file($path) || is_link($path)) {
+            return null;
+        }
+
+        $response = $this->fileUploadRequest($event->channelId(), $path);
+        if (null !== $response && $response['status_code'] >= 400
+            && 'O' === $event->channelType()
+            && $this->isPermissionDeniedResponse($response)
+            && $this->joinPublicChannel($event->channelId())) {
+            $response = $this->fileUploadRequest($event->channelId(), $path);
+        }
+
+        if (null === $response || $response['status_code'] >= 400) {
+            $this->logFailedRequest('POST', '/api/v4/files', $response, [
+                'channel_id' => $event->channelId(),
+                'channel_type' => $event->channelType(),
+                'filename' => basename($path),
+            ]);
+
+            return null;
+        }
+
+        try {
+            $payload = json_decode($response['body'], true, flags: JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            $payload = null;
+        }
+        $fileInfos = is_array($payload) ? ($payload['file_infos'] ?? null) : null;
+        $firstFileInfo = is_array($fileInfos) ? ($fileInfos[0] ?? null) : null;
+        $fileId = is_array($firstFileInfo) ? ($firstFileInfo['id'] ?? null) : null;
+        if (!is_string($fileId) || '' === trim($fileId)) {
+            $this->logger?->warning('Mattermost file upload response did not contain a file ID.', [
+                'channel_id' => $event->channelId(),
+                'filename' => basename($path),
+                'response_body' => $this->truncateResponseBody($response['body']),
+            ]);
+
+            return null;
+        }
+
+        return trim($fileId);
+    }
+
+    /**
+     * @param array<string, mixed> $props
+     * @param list<string>         $fileIds
+     */
+    #[\Override]
+    public function createPost(MattermostInboundEvent $event, string $message, array $props = [], array $fileIds = []): ?string
     {
         if (!$this->settings->enabled() || '' === trim($message)) {
             return null;
@@ -84,6 +133,9 @@ final class MattermostApiNotifier implements MattermostNotifier
         }
         if ([] !== $props) {
             $payload['props'] = $props;
+        }
+        if ([] !== $fileIds) {
+            $payload['file_ids'] = $fileIds;
         }
 
         $response = $this->request('POST', '/api/v4/posts', $payload);
@@ -304,6 +356,41 @@ final class MattermostApiNotifier implements MattermostNotifier
         $this->botUserId = trim($payload['id']);
 
         return $this->botUserId;
+    }
+
+    /** @return array{status_code: int, body: string}|null */
+    private function fileUploadRequest(string $channelId, string $path): ?array
+    {
+        $stream = fopen($path, 'rb');
+        if (false === $stream) {
+            return null;
+        }
+
+        try {
+            $response = $this->httpClient->request('POST', $this->settings->baseUrl().'/api/v4/files', [
+                'auth_bearer' => $this->settings->botToken(),
+                'headers' => ['Accept' => 'application/json'],
+                'body' => [
+                    'channel_id' => $channelId,
+                    'files' => $stream,
+                ],
+            ]);
+
+            return [
+                'status_code' => $response->getStatusCode(),
+                'body' => $response->getContent(false),
+            ];
+        } catch (TransportExceptionInterface) {
+            $this->logger?->warning('Mattermost API request failed due to a transport error.', [
+                'method' => 'POST',
+                'path' => '/api/v4/files',
+                'filename' => basename($path),
+            ]);
+
+            return null;
+        } finally {
+            fclose($stream);
+        }
     }
 
     /**

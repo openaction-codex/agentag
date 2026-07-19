@@ -293,7 +293,13 @@ final class DurableTraceableNotifier implements MattermostNotifier
     }
 
     #[\Override]
-    public function createPost(MattermostInboundEvent $event, string $message, array $props = []): string
+    public function uploadFile(MattermostInboundEvent $event, string $path): string
+    {
+        return 'file-id';
+    }
+
+    #[\Override]
+    public function createPost(MattermostInboundEvent $event, string $message, array $props = [], array $fileIds = []): string
     {
         $this->createdMessages[] = $message;
 

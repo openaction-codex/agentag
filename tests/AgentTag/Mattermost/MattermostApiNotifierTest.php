@@ -44,6 +44,56 @@ final class MattermostApiNotifierTest extends TestCase
         self::assertSame('✅ Complete', $updatedBody['message']);
     }
 
+    public function testItUploadsAFileAndAssociatesItWithTheReplyPost(): void
+    {
+        $file = tempnam(sys_get_temp_dir(), 'agentag-upload-');
+        self::assertIsString($file);
+        file_put_contents($file, 'attachment contents');
+        $requests = [];
+        $responses = [
+            new MockResponse('{"file_infos":[{"id":"file-id"}]}', ['http_code' => 201]),
+            new MockResponse('{"id":"answer-post-id"}', ['http_code' => 201]),
+        ];
+        $client = new MockHttpClient(static function (string $method, string $url, array $options) use (&$requests, &$responses): MockResponse {
+            $requests[] = [
+                'method' => $method,
+                'url' => $url,
+                'headers' => $options['normalized_headers'] ?? [],
+                'body' => self::requestBody($options),
+            ];
+
+            return array_shift($responses) ?? new MockResponse('', ['http_code' => 500]);
+        });
+        $notifier = new MattermostApiNotifier($client, new MattermostApiSettings('https://mattermost.example.test', 'bot-token', 20));
+
+        try {
+            $fileId = $notifier->uploadFile($this->publicChannelEvent(), $file);
+            $postId = $notifier->createPost($this->publicChannelEvent(), 'Generated report attached.', fileIds: [(string) $fileId]);
+        } finally {
+            unlink($file);
+        }
+
+        self::assertSame('file-id', $fileId);
+        self::assertSame('answer-post-id', $postId);
+        self::assertSame('POST', $requests[0]['method']);
+        self::assertSame('https://mattermost.example.test/api/v4/files', $requests[0]['url']);
+        $headers = $requests[0]['headers'];
+        if (!is_array($headers)) {
+            self::fail('Expected normalized request headers.');
+        }
+        $contentTypes = $headers['content-type'] ?? null;
+        if (!is_array($contentTypes) || !is_string($contentTypes[0] ?? null)) {
+            self::fail('Expected a normalized Content-Type header.');
+        }
+        self::assertStringContainsString('multipart/form-data', $contentTypes[0]);
+        self::assertSame([
+            'channel_id' => 'channel-id',
+            'message' => 'Generated report attached.',
+            'root_id' => 'post-id',
+            'file_ids' => ['file-id'],
+        ], $requests[1]['body']);
+    }
+
     public function testItJoinsPublicChannelsAndRetriesDeniedTypingIndicators(): void
     {
         $requests = [];

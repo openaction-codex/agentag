@@ -14,6 +14,7 @@ AgentTag is a self-hosted Symfony bot that delegates Mattermost threads to Codex
 - Treats new messages during a task as steering for the same Codex session.
 - Persists Codex session UUIDs and resumes them after steering, scheduled wakeups, retries, or worker restarts.
 - Supports waiting for CI, reviews, schedules, and other external state through durable Messenger wakeups.
+- Uploads completed files from each run's reply outbox and attaches them to the final Mattermost post.
 - Stores bounded retry policies, task deadlines, notification preferences, redacted logs, events, artifacts, and token usage.
 - Runs different Mattermost threads concurrently while serializing work within one thread.
 
@@ -81,7 +82,8 @@ The selected model and reasoning effort are persisted on the run and passed dire
     .codex-plugin/
     docs/
   runs/session-<hash>/         # persistent workspace per thread
-  artifacts/run-<id>/          # Codex outputs
+  artifacts/run-<id>/          # internal Codex output
+    reply-files/               # validated files attached to the final reply
 ```
 
 Repository URLs, safety policy, and domain knowledge belong in the template’s `AGENTS.md`, not application code.
@@ -94,7 +96,7 @@ Configure an outgoing webhook that sends matching posts to:
 POST https://agentag.example.com/integrations/mattermost/webhook
 ```
 
-The bot token must be able to read the thread, create and edit its own posts, show typing, and join public channels where it is invoked. Interactive actions are signed with `APP_SECRET`, kept in Mattermost’s server-side action context, and restricted to the original requester.
+The bot token must be able to read the thread, create and edit its own posts, upload files, show typing, and join public channels where it is invoked. Interactive actions are signed with `APP_SECRET`, kept in Mattermost’s server-side action context, and restricted to the original requester.
 
 Examples:
 

@@ -53,6 +53,10 @@ class AgentRun
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $answerPostId = null;
 
+    /** @var array<string, string> */
+    #[ORM\Column(type: 'json')]
+    private array $mattermostFileIds = [];
+
     #[ORM\Column(length: 120, nullable: true)]
     private ?string $requesterName = null;
 
@@ -103,7 +107,7 @@ class AgentRun
     private string $notificationPreference = 'milestones';
 
     /**
-     * @param list<string> $artifacts
+     * @param list<mixed> $artifacts
      */
     public function __construct(
         #[ORM\ManyToOne(targetEntity: ChatSession::class, inversedBy: 'runs')]
@@ -131,7 +135,7 @@ class AgentRun
         private ?string $requesterId = null,
         #[ORM\Column(type: 'text', nullable: true)]
         private ?string $workspacePath = null,
-        /** @var list<string> */
+        /** @var list<mixed> */
         #[ORM\Column(type: 'json')]
         private array $artifacts = [],
         #[ORM\Column(length: 32)]
@@ -233,7 +237,40 @@ class AgentRun
     /** @return list<string> */
     public function artifacts(): array
     {
-        return $this->artifacts;
+        $paths = [];
+        foreach ($this->artifacts as $artifact) {
+            if (is_string($artifact)) {
+                $paths[] = $artifact;
+            } elseif (is_array($artifact) && is_string($artifact['path'] ?? null)) {
+                $paths[] = $artifact['path'];
+            }
+        }
+
+        return $paths;
+    }
+
+    /** @return list<array{path: string, name: string, size: int, sha256: string}> */
+    public function replyArtifacts(): array
+    {
+        $artifacts = [];
+        foreach ($this->artifacts as $artifact) {
+            if (!is_array($artifact)
+                || !is_string($artifact['path'] ?? null)
+                || !is_string($artifact['name'] ?? null)
+                || !is_int($artifact['size'] ?? null)
+                || !is_string($artifact['sha256'] ?? null)) {
+                continue;
+            }
+
+            $artifacts[] = [
+                'path' => $artifact['path'],
+                'name' => $artifact['name'],
+                'size' => $artifact['size'],
+                'sha256' => $artifact['sha256'],
+            ];
+        }
+
+        return $artifacts;
     }
 
     public function workspaceCleanupState(): string
@@ -433,6 +470,22 @@ class AgentRun
         $this->answerPostId = $postId;
     }
 
+    public function mattermostFileId(string $artifactKey): ?string
+    {
+        $fileId = $this->mattermostFileIds[$artifactKey] ?? null;
+
+        return is_string($fileId) && '' !== trim($fileId) ? $fileId : null;
+    }
+
+    public function recordMattermostFileId(string $artifactKey, string $fileId): void
+    {
+        if ('' === trim($artifactKey) || '' === trim($fileId)) {
+            return;
+        }
+
+        $this->mattermostFileIds[$artifactKey] = trim($fileId);
+    }
+
     public function changeNotificationPreference(string $preference): void
     {
         if (in_array($preference, ['all', 'milestones', 'completion'], true)) {
@@ -535,7 +588,7 @@ class AgentRun
         $this->waitReason = null;
     }
 
-    /** @param list<string> $artifacts */
+    /** @param list<string|array{path: string, name: string, size: int, sha256: string}> $artifacts */
     public function recordRunnerResult(
         string $status,
         string $outputSummary,

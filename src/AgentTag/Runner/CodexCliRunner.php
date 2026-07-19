@@ -6,6 +6,7 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
 {
     public function __construct(
         private ProcessFactory $processFactory,
+        private ReplyArtifactCollector $artifactCollector = new ReplyArtifactCollector(),
     ) {
     }
 
@@ -20,6 +21,10 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         }
         if (!is_dir($input->artifactsDirectory())) {
             mkdir($input->artifactsDirectory(), 0777, true);
+        }
+        $replyArtifactsDirectory = $input->artifactsDirectory().'/'.ReplyArtifactCollector::DIRECTORY;
+        if (!is_dir($replyArtifactsDirectory)) {
+            mkdir($replyArtifactsDirectory, 0770, true);
         }
 
         $lastMessagePath = $input->artifactsDirectory().'/codex-last-message.txt';
@@ -51,7 +56,7 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
             $command,
             $input->workingDirectory(),
             $input->environment(),
-            $input->prompt(),
+            $this->promptWithReplyArtifactProtocol($input->prompt(), $replyArtifactsDirectory),
             $input->timeoutSeconds(),
         );
         $parser = new CodexJsonEventParser();
@@ -112,11 +117,24 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
             $parsed['message'],
             $stdout,
             $stderr,
-            [new AgentArtifact($lastMessagePath, 'Codex final message')],
+            $this->artifactCollector->collect($input->artifactsDirectory()),
             $this->tokenUsageFromOutput($stdout),
             $parser->threadId() ?? $input->resumeSessionId(),
             $parsed['continuation'],
         );
+    }
+
+    private function promptWithReplyArtifactProtocol(string $prompt, string $replyArtifactsDirectory): string
+    {
+        return rtrim($prompt)."\n\n".<<<PROMPT
+Reply file attachments:
+- To attach generated files to your final Mattermost reply, place only completed user-visible files directly in: {$replyArtifactsDirectory}
+- Files in that directory are uploaded automatically; do not create a manifest or use local filesystem links in the final response.
+- Use meaningful filenames and place no more than 5 files there.
+- Write incomplete files with a .part suffix outside the final filenames, then rename them only when complete.
+- Never place credentials, environment files, internal logs, source trees, symlinks, or files larger than 100 MiB there.
+- Remove obsolete files from the directory before finishing. Mention the attached filenames briefly in the final response.
+PROMPT;
     }
 
     private function finalMessage(string $lastMessagePath, string $stdout, int $exitCode, CodexJsonEventParser $parser): string

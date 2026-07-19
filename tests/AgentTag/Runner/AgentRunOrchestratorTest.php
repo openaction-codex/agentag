@@ -77,6 +77,14 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         self::assertSame(10, $run->inputTokens());
         self::assertSame(5, $run->outputTokens());
         self::assertSame(15, $run->totalTokens());
+        self::assertSame([[
+            'path' => '/tmp/artifact.txt',
+            'name' => 'artifact',
+            'size' => 0,
+            'sha256' => '',
+        ]], $run->replyArtifacts());
+        $run->recordMattermostFileId('artifact-key', 'mattermost-file-id');
+        $entityManager->flush();
         $events = $entityManager->getRepository(RunEvent::class)->findBy(['run' => $run], ['id' => 'ASC']);
         self::assertCount(4, $events);
         self::assertSame(RunEvent::TYPE_WORKSPACE_PREPARED, $events[0]->type());
@@ -92,6 +100,9 @@ final class AgentRunOrchestratorTest extends KernelTestCase
         self::assertSame(10, $storedSession->inputTokens());
         self::assertSame(5, $storedSession->outputTokens());
         self::assertSame(15, $storedSession->totalTokens());
+        $storedRun = $entityManager->getRepository(AgentRun::class)->find($run->id());
+        self::assertInstanceOf(AgentRun::class, $storedRun);
+        self::assertSame('mattermost-file-id', $storedRun->mattermostFileId('artifact-key'));
         self::assertNotNull($fakeRunner->input);
         self::assertSame($sessionWorkspace, $fakeRunner->input->workingDirectory());
         self::assertSame($this->workspaceDirectory.'/artifacts/run-123', $fakeRunner->input->artifactsDirectory());

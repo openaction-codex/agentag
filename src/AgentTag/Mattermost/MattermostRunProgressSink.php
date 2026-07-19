@@ -5,6 +5,7 @@ namespace App\AgentTag\Mattermost;
 use App\AgentTag\Run\RunEventRecorder;
 use App\AgentTag\Runner\AgentRunnerProgress;
 use App\AgentTag\Runner\AgentRunnerProgressSink;
+use App\AgentTag\Runner\ReplyArtifactCollector;
 use App\Entity\AgentRun;
 use App\Entity\RunEvent;
 use Doctrine\ORM\EntityManagerInterface;
@@ -102,10 +103,56 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
                 ? 'Task completed.'
                 : 'The task could not be completed.';
         }
-        $postId = $this->notifier->createPost($this->event, $message);
-        if (null !== $postId) {
-            $this->run->assignAnswerPost($postId);
-            $this->entityManager->flush();
+        $fileIds = $this->uploadReplyArtifacts();
+        $postId = $this->notifier->createPost($this->event, $message, fileIds: $fileIds);
+        if (null === $postId) {
+            throw new \RuntimeException(sprintf('Mattermost final reply delivery failed for run #%d.', $this->run->id() ?? 0));
+        }
+
+        $this->run->assignAnswerPost($postId);
+        $this->entityManager->flush();
+    }
+
+    /** @return list<string> */
+    private function uploadReplyArtifacts(): array
+    {
+        $fileIds = [];
+        foreach (array_slice($this->run->replyArtifacts(), 0, ReplyArtifactCollector::MAX_FILES) as $artifact) {
+            $this->assertArtifactUnchanged($artifact);
+            $artifactKey = hash('sha256', $artifact['name']."\0".$artifact['sha256']);
+            $fileId = $this->run->mattermostFileId($artifactKey);
+            if (null === $fileId) {
+                $fileId = $this->notifier->uploadFile($this->event, $artifact['path']);
+                if (null === $fileId) {
+                    throw new \RuntimeException(sprintf('Mattermost could not upload reply artifact "%s" for run #%d.', $artifact['name'], $this->run->id() ?? 0));
+                }
+
+                $this->run->recordMattermostFileId($artifactKey, $fileId);
+                $this->entityManager->flush();
+            }
+
+            $fileIds[] = $fileId;
+        }
+
+        return $fileIds;
+    }
+
+    /** @param array{path: string, name: string, size: int, sha256: string} $artifact */
+    private function assertArtifactUnchanged(array $artifact): void
+    {
+        $path = $artifact['path'];
+        $resolvedPath = realpath($path);
+        $size = false === $resolvedPath ? false : filesize($resolvedPath);
+        $sha256 = false === $resolvedPath ? false : hash_file('sha256', $resolvedPath);
+        if (false === $resolvedPath
+            || $resolvedPath !== $path
+            || is_link($path)
+            || !is_file($resolvedPath)
+            || ReplyArtifactCollector::DIRECTORY !== basename(dirname($resolvedPath))
+            || basename($resolvedPath) !== $artifact['name']
+            || $size !== $artifact['size']
+            || $sha256 !== $artifact['sha256']) {
+            throw new \RuntimeException(sprintf('Reply artifact "%s" changed after collection and will not be uploaded.', $artifact['name']));
         }
     }
 

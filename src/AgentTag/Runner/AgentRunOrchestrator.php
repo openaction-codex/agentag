@@ -109,7 +109,7 @@ final readonly class AgentRunOrchestrator
             $this->redactor->redact($summary),
             $this->redactor->redact($this->logSummary($result)),
             $workingDirectory,
-            array_map(static fn (AgentArtifact $artifact): string => $artifact->path(), $result->artifacts()),
+            array_map(static fn (AgentArtifact $artifact): array => $artifact->metadata(), $result->artifacts()),
             $result->exitCode(),
             $result->tokenUsage(),
         );

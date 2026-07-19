@@ -79,6 +79,73 @@ final class MattermostRunProgressSinkTest extends TestCase
         self::assertSame('answer-post', $run->answerPostId());
     }
 
+    public function testFinishUploadsReplyArtifactsOnceAndAttachesTheirIds(): void
+    {
+        $directory = sys_get_temp_dir().'/agentag-reply-files-'.bin2hex(random_bytes(6)).'/reply-files';
+        mkdir($directory, 0770, true);
+        $path = $directory.'/report.csv';
+        file_put_contents($path, "name,value\nA,1\n");
+        $contents = (string) file_get_contents($path);
+        $notifier = new ProgressTraceableMattermostNotifier();
+        $run = $this->task();
+        $run->recordRunnerResult(AgentRun::STATUS_COMPLETED, 'Report generated.', '', '/tmp/workspace', [[
+            'path' => $path,
+            'name' => 'report.csv',
+            'size' => strlen($contents),
+            'sha256' => hash('sha256', $contents),
+        ]], 0, null);
+        $sink = $this->sink($notifier, $run);
+
+        try {
+            $sink->finish();
+            $sink->finish();
+        } finally {
+            unlink($path);
+            rmdir($directory);
+            rmdir(dirname($directory));
+        }
+
+        self::assertSame([$path], $notifier->uploadedFiles);
+        self::assertSame([['file-1']], $notifier->createdFileIds);
+        self::assertSame('answer-post', $run->answerPostId());
+    }
+
+    public function testRetryReusesUploadedFileIdsWhenCreatingThePostInitiallyFails(): void
+    {
+        $directory = sys_get_temp_dir().'/agentag-reply-retry-'.bin2hex(random_bytes(6)).'/reply-files';
+        mkdir($directory, 0770, true);
+        $path = $directory.'/report.txt';
+        file_put_contents($path, 'ready');
+        $notifier = new ProgressTraceableMattermostNotifier();
+        $notifier->createPostResults = [null, 'answer-post'];
+        $run = $this->task();
+        $run->recordRunnerResult(AgentRun::STATUS_COMPLETED, 'Report generated.', '', '/tmp/workspace', [[
+            'path' => $path,
+            'name' => 'report.txt',
+            'size' => 5,
+            'sha256' => hash('sha256', 'ready'),
+        ]], 0, null);
+        $sink = $this->sink($notifier, $run);
+
+        try {
+            try {
+                $sink->finish();
+                self::fail('The first Mattermost post attempt should fail.');
+            } catch (\RuntimeException $exception) {
+                self::assertStringContainsString('final reply delivery failed', $exception->getMessage());
+            }
+            $sink->finish();
+        } finally {
+            unlink($path);
+            rmdir($directory);
+            rmdir(dirname($directory));
+        }
+
+        self::assertSame([$path], $notifier->uploadedFiles);
+        self::assertSame([['file-1'], ['file-1']], $notifier->createdFileIds);
+        self::assertSame('answer-post', $run->answerPostId());
+    }
+
     private function sink(ProgressTraceableMattermostNotifier $notifier, AgentRun $run): MattermostRunProgressSink
     {
         return new MattermostRunProgressSink(
@@ -118,6 +185,12 @@ final class ProgressTraceableMattermostNotifier implements MattermostNotifier
     public array $threadMessages = [];
     /** @var list<string> */
     public array $createdMessages = [];
+    /** @var list<list<string>> */
+    public array $createdFileIds = [];
+    /** @var list<string> */
+    public array $uploadedFiles = [];
+    /** @var list<string|null> */
+    public array $createPostResults = [];
     /** @var list<array<string, mixed>> */
     public array $updatedProps = [];
 
@@ -133,11 +206,20 @@ final class ProgressTraceableMattermostNotifier implements MattermostNotifier
     }
 
     #[\Override]
-    public function createPost(MattermostInboundEvent $event, string $message, array $props = []): string
+    public function uploadFile(MattermostInboundEvent $event, string $path): string
+    {
+        $this->uploadedFiles[] = $path;
+
+        return 'file-'.count($this->uploadedFiles);
+    }
+
+    #[\Override]
+    public function createPost(MattermostInboundEvent $event, string $message, array $props = [], array $fileIds = []): ?string
     {
         $this->createdMessages[] = $message;
+        $this->createdFileIds[] = $fileIds;
 
-        return 'answer-post';
+        return [] === $this->createPostResults ? 'answer-post' : array_shift($this->createPostResults);
     }
 
     #[\Override]
