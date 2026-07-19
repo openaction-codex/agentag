@@ -8,6 +8,8 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
+use function Symfony\Component\String\u;
+
 #[ORM\Entity]
 #[ORM\Table(name: 'agent_run')]
 class AgentRun
@@ -56,6 +58,10 @@ class AgentRun
     /** @var array<string, string> */
     #[ORM\Column(type: 'json')]
     private array $mattermostFileIds = [];
+
+    /** @var list<string> */
+    #[ORM\Column(type: 'json')]
+    private array $inputPostIds = [];
 
     #[ORM\Column(length: 120, nullable: true)]
     private ?string $requesterName = null;
@@ -152,6 +158,9 @@ class AgentRun
         private ?int $totalTokens = null,
     ) {
         $this->events = new ArrayCollection();
+        if (null !== $this->sourceEventId) {
+            $this->addInputPostId($this->sourceEventId);
+        }
     }
 
     public function id(): ?int
@@ -217,6 +226,20 @@ class AgentRun
     public function sourceEventId(): ?string
     {
         return $this->sourceEventId;
+    }
+
+    /** @return list<string> */
+    public function inputPostIds(): array
+    {
+        return $this->inputPostIds;
+    }
+
+    public function addInputPostId(string $postId): void
+    {
+        $postId = u($postId)->trim()->toString();
+        if ('' !== $postId && !in_array($postId, $this->inputPostIds, true)) {
+            $this->inputPostIds[] = $postId;
+        }
     }
 
     public function requesterId(): ?string

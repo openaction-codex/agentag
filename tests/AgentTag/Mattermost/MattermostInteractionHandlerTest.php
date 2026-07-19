@@ -53,6 +53,7 @@ final class MattermostInteractionHandlerTest extends TestCase
         $savedRun = array_pop($store->savedRuns);
         self::assertInstanceOf(AgentRun::class, $savedRun);
         self::assertSame('task-post-1', $savedRun->taskPostId());
+        self::assertSame(['post'], $savedRun->inputPostIds());
         self::assertSame(['mattermost:team:channel:post'], $store->sessionKeys);
     }
 
@@ -85,6 +86,8 @@ final class MattermostInteractionHandlerTest extends TestCase
         $handler->handle($this->event('@Codex focus on the backend'));
 
         self::assertSame(['focus on the backend'], $interrupter->steering);
+        self::assertSame(['post'], $interrupter->activeRun->inputPostIds());
+        self::assertSame([$interrupter->activeRun], $store->savedRuns);
         self::assertSame([], $store->sessionKeys);
         self::assertSame([], $bus->runIds);
     }
@@ -113,6 +116,8 @@ final class MattermostInteractionHandlerTest extends TestCase
         $handler->handle($this->event('@Codex retry from the test step'));
 
         self::assertSame([8], $bus->runIds);
+        self::assertSame(['post'], $interrupter->retryRun->inputPostIds());
+        self::assertSame([$interrupter->retryRun], $store->savedRuns);
         self::assertSame([], $store->sessionKeys);
     }
 
@@ -180,7 +185,7 @@ final class TraceableChatSessionStore implements ChatSessionStore
     {
         $this->sessionKeys[] = $reference->key();
         $session = new ChatSession($reference->key(), $reference->teamId(), $reference->channelId(), $reference->threadId(), new \DateTimeImmutable(), workspacePath: '/tmp/workspace');
-        $run = new AgentRun($session, AgentRun::STATUS_ACCEPTED, new \DateTimeImmutable(), workspacePath: '/tmp/workspace');
+        $run = new AgentRun($session, AgentRun::STATUS_ACCEPTED, new \DateTimeImmutable(), sourceEventId: $sourceEventId, workspacePath: '/tmp/workspace');
         if (null !== $this->modelSelection) {
             $session->selectModel($this->modelSelection);
             $run->selectModel($this->modelSelection);

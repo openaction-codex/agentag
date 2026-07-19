@@ -5,6 +5,7 @@ namespace App\Tests\MessageHandler;
 use App\AgentTag\Agent\AgentProfile;
 use App\AgentTag\Agent\AgentProfileProvider;
 use App\AgentTag\Mattermost\MattermostInboundEvent;
+use App\AgentTag\Mattermost\MattermostInputFileDownloader;
 use App\AgentTag\Mattermost\MattermostNotifier;
 use App\AgentTag\Mattermost\MattermostRunProgressSinkFactory;
 use App\AgentTag\Mattermost\TaskCardRenderer;
@@ -82,6 +83,8 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         $renderer = static::getContainer()->get(TaskCardRenderer::class);
         self::assertInstanceOf(TaskCardRenderer::class, $renderer);
         $notifier = new DurableTraceableNotifier();
+        $inputFileDownloader = new TraceableMattermostInputFileDownloader();
+        $layout = new WorkspaceLayout($this->workspace);
         $handler = new RunAgentRunMessageHandler(
             $entityManager,
             new DurableAgentProfileProvider($this->workspace),
@@ -91,6 +94,8 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
             new AgentRunTurnGate($entityManager),
             $bus,
             new AgentRunExecutionLock(),
+            $inputFileDownloader,
+            $layout,
         );
 
         $handler(new RunAgentRunMessage((int) $run->id()));
@@ -101,6 +106,8 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         self::assertCount(1, $bus->delays);
         self::assertGreaterThanOrEqual(299000, $bus->delays[0]);
         self::assertStringContainsString('I’ll check again', $notifier->threadMessages[0]);
+        self::assertSame(['source-post'], $inputFileDownloader->postIds);
+        self::assertSame($this->root.'/artifacts/run-'.$run->id().'/input-files', $inputFileDownloader->directory);
         $events = $entityManager->getRepository(RunEvent::class)->findBy(['run' => $run]);
         self::assertContains(RunEvent::TYPE_TASK_WAITING, array_map(static fn (RunEvent $event): string => $event->type(), $events));
     }
@@ -178,6 +185,7 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         $renderer = static::getContainer()->get(TaskCardRenderer::class);
         self::assertInstanceOf(TaskCardRenderer::class, $renderer);
         $recorder = new RunEventRecorder($entityManager, new SensitiveTextRedactor());
+        $inputFileDownloader = new TraceableMattermostInputFileDownloader();
         $handler = new RunAgentRunMessageHandler(
             $entityManager,
             new DurableAgentProfileProvider($this->workspace),
@@ -187,6 +195,8 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
             new AgentRunTurnGate($entityManager),
             new DelayedTraceableMessageBus(),
             new AgentRunExecutionLock(),
+            $inputFileDownloader,
+            new WorkspaceLayout($this->workspace),
         );
 
         $handler(new RunAgentRunMessage((int) $run->id()));
@@ -194,13 +204,44 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         self::assertNotNull($runner->input);
         self::assertSame('preserved-session-uuid', $runner->input->resumeSessionId());
         self::assertStringContainsString('worker process restarted', $runner->input->prompt());
+        self::assertSame(['source-post'], $inputFileDownloader->postIds);
         self::assertSame(AgentRun::STATUS_COMPLETED, $run->status());
+    }
+
+    public function testItFailsClearlyWhenMattermostInputFilesCannotBePrepared(): void
+    {
+        $entityManager = $this->entityManager();
+        $run = $this->persistRun($entityManager);
+        $runner = new ContinuationAgentRunner(new AgentRunnerResult(0, 'Should not run.', '', '', [], null));
+        $renderer = static::getContainer()->get(TaskCardRenderer::class);
+        self::assertInstanceOf(TaskCardRenderer::class, $renderer);
+        $recorder = new RunEventRecorder($entityManager, new SensitiveTextRedactor());
+        $inputFileDownloader = new TraceableMattermostInputFileDownloader();
+        $inputFileDownloader->exception = new \RuntimeException('attachment exceeds the configured limit');
+        $handler = new RunAgentRunMessageHandler(
+            $entityManager,
+            new DurableAgentProfileProvider($this->workspace),
+            new AgentRunPromptBuilder(),
+            new AgentRunOrchestrator($runner, new WorkspaceLayout($this->workspace), new SensitiveTextRedactor(), $entityManager, $recorder),
+            new MattermostRunProgressSinkFactory(new DurableTraceableNotifier(), $renderer, $entityManager, $recorder),
+            new AgentRunTurnGate($entityManager),
+            new DelayedTraceableMessageBus(),
+            new AgentRunExecutionLock(),
+            $inputFileDownloader,
+            new WorkspaceLayout($this->workspace),
+        );
+
+        $handler(new RunAgentRunMessage((int) $run->id()));
+
+        self::assertNull($runner->input);
+        self::assertSame(AgentRun::STATUS_FAILED, $run->status());
+        self::assertSame('Could not prepare Mattermost input files: attachment exceeds the configured limit', $run->outputSummary());
     }
 
     private function persistRun(EntityManagerInterface $entityManager): AgentRun
     {
         $session = new ChatSession('mattermost:team:channel:thread', 'team', 'channel', 'thread', new \DateTimeImmutable(), $this->workspace);
-        $run = new AgentRun($session, AgentRun::STATUS_ACCEPTED, new \DateTimeImmutable(), contextSnapshot: 'User requested a CI-watched fix.', requesterId: 'requester', workspacePath: $this->workspace);
+        $run = new AgentRun($session, AgentRun::STATUS_ACCEPTED, new \DateTimeImmutable(), contextSnapshot: 'User requested a CI-watched fix.', sourceEventId: 'source-post', requesterId: 'requester', workspacePath: $this->workspace);
         $run->initializeTask('Fix and watch CI', 'Workspace ready', 'thomas', new \DateTimeImmutable('+1 day'), 2, 60, 'milestones');
         $run->assignTaskPost('task-post');
         $entityManager->persist($session);
@@ -216,6 +257,26 @@ final class RunAgentRunMessageHandlerTest extends KernelTestCase
         self::assertInstanceOf(EntityManagerInterface::class, $entityManager);
 
         return $entityManager;
+    }
+}
+
+final class TraceableMattermostInputFileDownloader implements MattermostInputFileDownloader
+{
+    /** @var list<string> */
+    public array $postIds = [];
+    public ?string $directory = null;
+    public ?\RuntimeException $exception = null;
+
+    #[\Override]
+    public function sync(array $postIds, string $inputFilesDirectory): array
+    {
+        $this->postIds = $postIds;
+        $this->directory = $inputFilesDirectory;
+        if (null !== $this->exception) {
+            throw $this->exception;
+        }
+
+        return [];
     }
 }
 

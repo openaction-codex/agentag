@@ -23,6 +23,7 @@
         "symfony/monolog-bundle": "^3.0|^4.0",
         "symfony/process": "8.1.*",
         "symfony/runtime": "8.1.*",
+        "symfony/string": "8.1.*",
         "symfony/yaml": "8.1.*"
     },
     "config": {

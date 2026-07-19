@@ -40,6 +40,11 @@ final readonly class WorkspaceLayout
         return $this->runtimeRootPath().'/artifacts/'.$this->safeSegment($runId);
     }
 
+    public function inputFilesPath(string $runId): string
+    {
+        return $this->artifactsPath($runId).'/input-files';
+    }
+
     private function assertAbsolutePath(string $path, string $label): void
     {
         if (!str_starts_with($path, '/')) {

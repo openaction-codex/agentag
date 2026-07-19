@@ -52,6 +52,9 @@ services:
     App\AgentTag\Mattermost\MattermostNotifier:
         alias: App\AgentTag\Mattermost\MattermostApiNotifier
 
+    App\AgentTag\Mattermost\MattermostInputFileDownloader:
+        alias: App\AgentTag\Mattermost\MattermostApiInputFileDownloader
+
     App\AgentTag\Runner\TaskModelSelector:
         alias: App\AgentTag\Runner\CodexTaskModelSelector
 

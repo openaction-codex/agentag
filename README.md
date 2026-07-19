@@ -14,6 +14,7 @@ AgentTag is a self-hosted Symfony bot that delegates Mattermost threads to Codex
 - Treats new messages during a task as steering for the same Codex session.
 - Persists Codex session UUIDs and resumes them after steering, scheduled wakeups, retries, or worker restarts.
 - Supports waiting for CI, reviews, schedules, and other external state through durable Messenger wakeups.
+- Downloads files attached to task messages into each run's read-only input directory for Codex to inspect.
 - Uploads completed files from each run's reply outbox and attaches them to the final Mattermost post.
 - Stores bounded retry policies, task deadlines, notification preferences, redacted logs, events, artifacts, and token usage.
 - Runs different Mattermost threads concurrently while serializing work within one thread.
@@ -83,6 +84,7 @@ The selected model and reasoning effort are persisted on the run and passed dire
     docs/
   runs/session-<hash>/         # persistent workspace per thread
   artifacts/run-<id>/          # internal Codex output
+    input-files/               # Mattermost attachments supplied as task input
     reply-files/               # validated files attached to the final reply
 ```
 
@@ -109,7 +111,7 @@ Examples:
 @Codex retry from the test step
 ```
 
-While a task is running or waiting, a new mentioned message becomes steering for that same task rather than a replacement run. Stop interrupts a running command or immediately stops a task queued for retry, and preserves the workspace for 24 hours. Retry and resume remain available as explicit chat commands. Raw command events never appear in the status card.
+Files attached to the initial request or a later steering message are downloaded before the corresponding Codex turn and exposed through the absolute `input-files` path in the prompt. While a task is running or waiting, a new mentioned message becomes steering for that same task rather than a replacement run. Stop interrupts a running command or immediately stops a task queued for retry, and preserves the workspace for 24 hours. Retry and resume remain available as explicit chat commands. Raw command events never appear in the status card.
 
 The first request in a Mattermost thread selects the model route for that session. Follow-up requests in the same thread reuse that route without running model selection again; a request in a new thread starts a new session and selects its own route.
 

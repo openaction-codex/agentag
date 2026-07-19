@@ -3,12 +3,14 @@
 namespace App\MessageHandler;
 
 use App\AgentTag\Agent\AgentProfileProvider;
+use App\AgentTag\Mattermost\MattermostInputFileDownloader;
 use App\AgentTag\Mattermost\MattermostRunProgressSink;
 use App\AgentTag\Mattermost\MattermostRunProgressSinkFactory;
 use App\AgentTag\Run\AgentRunExecutionLock;
 use App\AgentTag\Run\AgentRunTurnGate;
 use App\AgentTag\Runner\AgentRunOrchestrator;
 use App\AgentTag\Runner\AgentRunPromptBuilder;
+use App\AgentTag\Workspace\WorkspaceLayout;
 use App\Entity\AgentRun;
 use App\Message\RunAgentRunMessage;
 use Doctrine\ORM\EntityManagerInterface;
@@ -29,6 +31,8 @@ final readonly class RunAgentRunMessageHandler
         private AgentRunTurnGate $turnGate,
         private MessageBusInterface $messageBus,
         private AgentRunExecutionLock $executionLock,
+        private MattermostInputFileDownloader $inputFileDownloader,
+        private WorkspaceLayout $workspaceLayout,
     ) {
     }
 
@@ -96,6 +100,17 @@ final readonly class RunAgentRunMessageHandler
         }
         if (!$this->turnGate->waitForTurn($run, $agent->timeoutSeconds() + 30, $progressSink->onHeartbeat(...))) {
             $this->fail($run, 'Task could not start because an earlier task in this thread is still active.', $progressSink);
+
+            return;
+        }
+
+        try {
+            $this->inputFileDownloader->sync(
+                $run->inputPostIds(),
+                $this->workspaceLayout->inputFilesPath(sprintf('run-%d', $message->runId())),
+            );
+        } catch (\RuntimeException $exception) {
+            $this->fail($run, 'Could not prepare Mattermost input files: '.$exception->getMessage(), $progressSink);
 
             return;
         }

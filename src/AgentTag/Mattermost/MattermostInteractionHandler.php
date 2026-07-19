@@ -61,6 +61,8 @@ final readonly class MattermostInteractionHandler
         if ($this->isRetryCommand($instruction)) {
             $run = $this->runInterrupter->retryLatestRun($session, $instruction);
             if (null !== $run) {
+                $run->addInputPostId($event->postId());
+                $this->sessionStore->save($run);
                 $this->dispatch($run);
                 $this->refreshTaskCard($run);
 
@@ -70,11 +72,12 @@ final readonly class MattermostInteractionHandler
 
         $activeRun = $this->runInterrupter->steerActiveRun($session, $instruction, $event->eventId(), $event->userId());
         if (null !== $activeRun) {
+            $activeRun->addInputPostId($event->postId());
             $preference = $this->requestedNotificationPreference($event->text());
             if (null !== $preference) {
                 $activeRun->changeNotificationPreference($preference);
-                $this->sessionStore->save($activeRun);
             }
+            $this->sessionStore->save($activeRun);
             if (AgentRun::STATUS_ACCEPTED === $activeRun->status() && null !== $activeRun->wakeAt()) {
                 $this->dispatch($activeRun);
             }
