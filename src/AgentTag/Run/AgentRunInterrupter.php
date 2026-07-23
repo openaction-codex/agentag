@@ -19,14 +19,14 @@ final readonly class AgentRunInterrupter implements RunInterrupter
     }
 
     #[\Override]
-    public function cancelActiveRun(ChatSessionReference $reference, string $sourceEventId, string $requesterId): ?AgentRun
+    public function cancelActiveRun(ChatSessionReference $reference, string $sourceEventId, string $requesterId, string $requesterName = ''): ?AgentRun
     {
         $run = $this->activeRun($reference);
         if (null === $run) {
             return null;
         }
 
-        $run->requestCancellation();
+        $run->requestCancellation('' !== $requesterName ? $requesterName : $requesterId);
         $this->recordControl($run, RunEvent::TYPE_CANCELLATION_REQUESTED, 'Cancellation requested.', $reference, $sourceEventId, $requesterId);
 
         return $run;

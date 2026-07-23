@@ -41,6 +41,24 @@ final class AgentRunPromptBuilderTest extends TestCase
         self::assertStringNotContainsString('spawn', $prompt);
     }
 
+    public function testItMarksTheCurrentRequestAsAuthoritativeAfterTheThreadContext(): void
+    {
+        $run = new AgentRun(
+            new ChatSession('mattermost:t:c:p', 't', 'c', 'p', new \DateTimeImmutable()),
+            AgentRun::STATUS_ACCEPTED,
+            new \DateTimeImmutable(),
+            inputSummary: '@agent explain the failing import fields',
+            contextSnapshot: "Thread messages:\n- user: 10h?",
+        );
+
+        $prompt = (new AgentRunPromptBuilder())->build($run);
+
+        self::assertStringContainsString(
+            "Thread messages:\n- user: 10h?\n\nCurrent user request (authoritative; answer this request):\n@agent explain the failing import fields",
+            $prompt,
+        );
+    }
+
     public function testAResumedTaskKeepsTheSameSessionContext(): void
     {
         $run = $this->taskRun(TaskModelSelection::fromRoute('sol-medium', 'Read-heavy synthesis across several documents.'));

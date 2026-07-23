@@ -6,5 +6,5 @@ use App\AgentTag\Session\ChatThreadContext;
 
 interface MattermostThreadContextProvider
 {
-    public function contextFor(MattermostInboundEvent $event): ChatThreadContext;
+    public function contextFor(MattermostInboundEvent $event, string $canonicalThreadId): ChatThreadContext;
 }

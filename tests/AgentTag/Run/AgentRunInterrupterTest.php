@@ -45,11 +45,13 @@ final class AgentRunInterrupterTest extends KernelTestCase
             new ChatSessionReference('team', 'channel', 'thread'),
             'new-post',
             'user',
+            'baptiste',
         );
 
         self::assertSame($activeRun, $interrupted);
         self::assertSame(AgentRun::STATUS_INTERRUPT_REQUESTED, $activeRun->status());
         self::assertSame(AgentRun::INTERRUPT_CANCEL, $activeRun->interruptionKind());
+        self::assertSame('baptiste', $activeRun->stoppedByName());
         self::assertSame(AgentRun::STATUS_COMPLETED, $completedRun->status());
         $events = $entityManager->getRepository(RunEvent::class)->findBy(['run' => $activeRun]);
         self::assertCount(1, $events);

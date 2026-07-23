@@ -42,13 +42,14 @@ final class MattermostActionController extends AbstractController
             return $this->json(['error' => ['message' => 'Task not found.']], Response::HTTP_NOT_FOUND);
         }
         $userId = is_array($payload) && is_string($payload['user_id'] ?? null) ? $payload['user_id'] : '';
-        if (null !== $run->requesterId() && '' !== $userId && $run->requesterId() !== $userId) {
+        $userName = is_array($payload) && is_string($payload['user_name'] ?? null) ? $payload['user_name'] : '';
+        if ('cancel' !== $action && null !== $run->requesterId() && '' !== $userId && $run->requesterId() !== $userId) {
             return $this->json(['error' => ['message' => 'Only the task requester can control this task.']], Response::HTTP_FORBIDDEN);
         }
 
         $ephemeral = match ($action) {
             'details' => $this->technicalLog($run),
-            'cancel' => $this->cancel($run),
+            'cancel' => $this->cancel($run, '' !== $userName ? $userName : $userId),
             'retry' => $this->retry($run, 'Retry the task from the last useful completed stage.', $messageBus),
             'resume' => $this->retry($run, 'Resume the stopped task from the preserved workspace.', $messageBus),
             'discard' => $this->discard($run, $filesystem),
@@ -65,7 +66,11 @@ final class MattermostActionController extends AbstractController
             default => null,
         };
         if (null !== $eventType) {
-            $runEventRecorder->record($run, $eventType, $ephemeral, ['source' => 'mattermost_button', 'user_id' => $userId]);
+            $runEventRecorder->record($run, $eventType, $ephemeral, [
+                'source' => 'mattermost_button',
+                'user_id' => $userId,
+                'user_name' => $userName,
+            ]);
         }
 
         $entityManager->flush();
@@ -77,12 +82,12 @@ final class MattermostActionController extends AbstractController
         ]);
     }
 
-    private function cancel(AgentRun $run): ?string
+    private function cancel(AgentRun $run, string $stoppedByName): ?string
     {
         if (!$run->isActive()) {
             return null;
         }
-        $run->requestCancellation();
+        $run->requestCancellation($stoppedByName);
 
         return AgentRun::STATUS_INTERRUPTED === $run->status()
             ? 'Stopped the task. The workspace will be preserved for 24 hours.'

@@ -44,11 +44,14 @@ final readonly class SessionContextSnapshotBuilder
         $lines = ['Thread messages:'];
 
         foreach ($threadContext->messages() as $message) {
+            if ($this->isTaskCard($message->text())) {
+                continue;
+            }
             $lines[] = sprintf(
                 '- %s (%s): %s',
                 $message->authorId(),
                 $message->externalId(),
-                $this->singleLine($message->text()),
+                $this->singleLine($message->text(), 3000),
             );
         }
 
@@ -70,8 +73,8 @@ final readonly class SessionContextSnapshotBuilder
             $lines[] = sprintf(
                 '- %s: input=%s output=%s',
                 $run->createdAt()->format(\DateTimeInterface::ATOM),
-                $this->singleLine($run->inputSummary() ?? '(none)'),
-                $this->singleLine($run->outputSummary() ?? '(none)'),
+                $this->singleLine($run->inputSummary() ?? '(none)', 500),
+                $this->singleLine($run->outputSummary() ?? '(none)', 1500),
             );
         }
 
@@ -82,9 +85,19 @@ final readonly class SessionContextSnapshotBuilder
         return implode("\n", $lines);
     }
 
-    private function singleLine(string $value): string
+    private function singleLine(string $value, ?int $maxCharacters = null): string
     {
-        return preg_replace('/\s+/', ' ', trim($value)) ?? trim($value);
+        $value = preg_replace('/\s+/', ' ', trim($value)) ?? trim($value);
+        if (null !== $maxCharacters && mb_strlen($value) > $maxCharacters) {
+            $value = rtrim(mb_substr($value, 0, max(0, $maxCharacters - 1))).'…';
+        }
+
+        return $value;
+    }
+
+    private function isTaskCard(string $message): bool
+    {
+        return 1 === preg_match('/^>\s*(?:🟡|🔵|✅|❌|⏹️)\s+\*\*/u', trim($message));
     }
 
     private function bound(string $snapshot): string

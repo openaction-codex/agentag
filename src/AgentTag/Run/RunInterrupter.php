@@ -7,7 +7,7 @@ use App\Entity\AgentRun;
 
 interface RunInterrupter
 {
-    public function cancelActiveRun(ChatSessionReference $reference, string $sourceEventId, string $requesterId): ?AgentRun;
+    public function cancelActiveRun(ChatSessionReference $reference, string $sourceEventId, string $requesterId, string $requesterName = ''): ?AgentRun;
 
     public function steerActiveRun(ChatSessionReference $reference, string $instruction, string $sourceEventId, string $requesterId): ?AgentRun;
 

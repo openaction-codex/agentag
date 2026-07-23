@@ -17,13 +17,15 @@ final readonly class MattermostApiThreadContextProvider implements MattermostThr
     }
 
     #[\Override]
-    public function contextFor(MattermostInboundEvent $event): ChatThreadContext
+    public function contextFor(MattermostInboundEvent $event, string $canonicalThreadId): ChatThreadContext
     {
         if (!$this->settings->enabled()) {
             return $this->fallbackContext($event);
         }
 
-        $rootPostId = '' !== $event->rootId() ? $event->rootId() : $event->postId();
+        $rootPostId = in_array($event->channelType(), ['D', 'G'], true)
+            ? $event->postId()
+            : $canonicalThreadId;
 
         try {
             $response = $this->httpClient->request(
@@ -49,7 +51,7 @@ final readonly class MattermostApiThreadContextProvider implements MattermostThr
             return $this->fallbackContext($event);
         }
 
-        return $this->contextFromPayload($payload, $rootPostId) ?? $this->fallbackContext($event);
+        return $this->contextFromPayload($payload, $rootPostId, $event) ?? $this->fallbackContext($event);
     }
 
     private function fallbackContext(MattermostInboundEvent $event): ChatThreadContext
@@ -79,7 +81,7 @@ final readonly class MattermostApiThreadContextProvider implements MattermostThr
     /**
      * @param array<string, mixed> $payload
      */
-    private function contextFromPayload(array $payload, string $rootPostId): ?ChatThreadContext
+    private function contextFromPayload(array $payload, string $rootPostId, MattermostInboundEvent $event): ?ChatThreadContext
     {
         $posts = $payload['posts'] ?? null;
         if (!is_array($posts)) {
@@ -91,15 +93,19 @@ final readonly class MattermostApiThreadContextProvider implements MattermostThr
             return null;
         }
 
-        $messagesById = [];
-        $orderedMessages = [];
+        $orderPositions = [];
+        foreach ($order as $position => $postId) {
+            if (is_string($postId)) {
+                $orderPositions[$postId] = $position;
+            }
+        }
 
-        foreach ($order as $postId) {
+        $entries = [];
+
+        foreach ($posts as $postId => $post) {
             if (!is_string($postId)) {
                 continue;
             }
-
-            $post = $posts[$postId] ?? null;
             if (!is_array($post)) {
                 continue;
             }
@@ -109,12 +115,36 @@ final readonly class MattermostApiThreadContextProvider implements MattermostThr
                 continue;
             }
 
-            $messagesById[$message->externalId()] = $message;
-            $orderedMessages[] = $message;
+            $createdAt = $post['create_at'] ?? 0;
+            $entries[] = [
+                'message' => $message,
+                'created_at' => is_int($createdAt) || is_float($createdAt) || is_string($createdAt) && is_numeric($createdAt)
+                    ? (int) $createdAt
+                    : 0,
+                'order' => $orderPositions[$postId] ?? \PHP_INT_MAX,
+            ];
         }
 
-        if ([] === $orderedMessages) {
+        if ([] === $entries) {
             return null;
+        }
+
+        usort($entries, static fn (array $left, array $right): int => [
+            $left['created_at'],
+            $left['order'],
+            $left['message']->externalId(),
+        ] <=> [
+            $right['created_at'],
+            $right['order'],
+            $right['message']->externalId(),
+        ]);
+
+        $messagesById = [];
+        $orderedMessages = [];
+        foreach ($entries as $entry) {
+            $message = $entry['message'];
+            $messagesById[$message->externalId()] = $message;
+            $orderedMessages[] = $message;
         }
 
         $rootMessage = $messagesById[$rootPostId] ?? null;
@@ -122,6 +152,13 @@ final readonly class MattermostApiThreadContextProvider implements MattermostThr
             $orderedMessages,
             static fn (ChatThreadMessage $message): bool => $message->externalId() !== $rootPostId,
         ));
+        $currentMessage = $messagesById[$event->postId()]
+            ?? new ChatThreadMessage($event->postId(), $event->userId(), $event->text());
+        $replyMessages = array_values(array_filter(
+            $replyMessages,
+            static fn (ChatThreadMessage $message): bool => $message->externalId() !== $currentMessage->externalId(),
+        ));
+        $replyMessages[] = $currentMessage;
         $replyLimit = null === $rootMessage ? $this->settings->recentReplyLimit() : $this->settings->recentReplyLimit() - 1;
         $recentReplies = array_slice($replyMessages, -max(0, $replyLimit));
 

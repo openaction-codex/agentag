@@ -23,6 +23,7 @@ final class MattermostActionControllerTest extends WebTestCase
 
         $client->jsonRequest('POST', '/integrations/mattermost/action', [
             'user_id' => 'requester',
+            'user_name' => 'thomas',
             'context' => [
                 'run_id' => $run->id(),
                 'action' => 'cancel',
@@ -47,6 +48,32 @@ final class MattermostActionControllerTest extends WebTestCase
         $this->entityManager()->refresh($run);
         self::assertSame(AgentRun::STATUS_INTERRUPT_REQUESTED, $run->status());
         self::assertSame(AgentRun::INTERRUPT_CANCEL, $run->interruptionKind());
+        self::assertSame('thomas', $run->stoppedByName());
+    }
+
+    public function testAnyMattermostUserCanStopAnotherUsersTask(): void
+    {
+        $client = static::createClient();
+        $this->refreshDatabase();
+        $run = $this->persistRun(AgentRun::STATUS_RUNNING);
+        $renderer = static::getContainer()->get(TaskCardRenderer::class);
+        self::assertInstanceOf(TaskCardRenderer::class, $renderer);
+
+        $client->jsonRequest('POST', '/integrations/mattermost/action', [
+            'user_id' => 'different-user',
+            'user_name' => 'baptiste',
+            'context' => [
+                'run_id' => $run->id(),
+                'action' => 'cancel',
+                'signature' => $renderer->signature((int) $run->id(), 'cancel'),
+            ],
+        ]);
+
+        self::assertResponseIsSuccessful();
+        $this->entityManager()->refresh($run);
+        self::assertSame(AgentRun::STATUS_INTERRUPT_REQUESTED, $run->status());
+        self::assertSame('baptiste', $run->stoppedByName());
+        self::assertStringContainsString('Stop requested by @baptiste.', (string) $client->getResponse()->getContent());
     }
 
     public function testStopImmediatelyFinishesATaskWaitingForAutomaticRetry(): void

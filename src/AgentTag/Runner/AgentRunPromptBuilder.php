@@ -9,7 +9,11 @@ final readonly class AgentRunPromptBuilder
     public function build(AgentRun $run, ?string $steering = null): string
     {
         $continuation = null === $run->codexThreadId()
-            ? "Session context:\n".($run->contextSnapshot() ?? '(none)')
+            ? sprintf(
+                "Session context:\n%s\n\nCurrent user request (authoritative; answer this request):\n%s",
+                $run->contextSnapshot() ?? '(none)',
+                $run->inputSummary() ?? '(none)',
+            )
             : $this->resumeContext($run, $steering);
 
         return trim(<<<PROMPT

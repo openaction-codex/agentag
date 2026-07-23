@@ -66,6 +66,9 @@ class AgentRun
     #[ORM\Column(length: 120, nullable: true)]
     private ?string $requesterName = null;
 
+    #[ORM\Column(length: 120, nullable: true)]
+    private ?string $stoppedByName = null;
+
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $startedAt = null;
 
@@ -250,6 +253,11 @@ class AgentRun
     public function requesterName(): ?string
     {
         return $this->requesterName;
+    }
+
+    public function stoppedByName(): ?string
+    {
+        return $this->stoppedByName;
     }
 
     public function workspacePath(): ?string
@@ -544,10 +552,15 @@ class AgentRun
         $this->currentStage = substr($stage, 0, 240);
     }
 
-    public function requestCancellation(): void
+    public function requestCancellation(?string $stoppedByName = null): void
     {
         if ($this->isTerminal()) {
             return;
+        }
+
+        $stoppedByName = ltrim(trim($stoppedByName ?? ''), '@');
+        if ('' !== $stoppedByName) {
+            $this->stoppedByName = mb_substr($stoppedByName, 0, 120);
         }
 
         if (!in_array($this->status, [self::STATUS_RUNNING, self::STATUS_INTERRUPT_REQUESTED], true)) {

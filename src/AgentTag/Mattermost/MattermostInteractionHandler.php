@@ -46,7 +46,7 @@ final readonly class MattermostInteractionHandler
         $instruction = $this->instruction($event->text());
 
         if ($this->isStopCommand($instruction)) {
-            $run = $this->runInterrupter->cancelActiveRun($session, $event->eventId(), $event->userId());
+            $run = $this->runInterrupter->cancelActiveRun($session, $event->eventId(), $event->userId(), $event->userName());
             if (null !== $run) {
                 if (null === $run->taskPostId()) {
                     $this->notifier->postProgress($event, 'Cancellation requested before the task started.');
@@ -91,7 +91,7 @@ final readonly class MattermostInteractionHandler
             $run = $this->sessionStore->recordRun(
                 $session,
                 $event->text(),
-                $this->threadContextProvider->contextFor($event),
+                $this->threadContextProvider->contextFor($event, $session->threadId()),
                 $agent,
                 $event->eventId(),
                 $event->userId(),

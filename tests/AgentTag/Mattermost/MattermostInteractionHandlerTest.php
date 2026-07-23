@@ -231,7 +231,7 @@ final readonly class FixedAgentProfileProvider implements AgentProfileProvider
 final readonly class FixedMattermostThreadContextProvider implements MattermostThreadContextProvider
 {
     #[\Override]
-    public function contextFor(MattermostInboundEvent $event): ChatThreadContext
+    public function contextFor(MattermostInboundEvent $event, string $canonicalThreadId): ChatThreadContext
     {
         return new ChatThreadContext([new ChatThreadMessage($event->postId(), $event->userId(), $event->text())]);
     }
@@ -286,7 +286,7 @@ final class TraceableRunInterrupter implements RunInterrupter
     public array $steering = [];
 
     #[\Override]
-    public function cancelActiveRun(ChatSessionReference $reference, string $sourceEventId, string $requesterId): ?AgentRun
+    public function cancelActiveRun(ChatSessionReference $reference, string $sourceEventId, string $requesterId, string $requesterName = ''): ?AgentRun
     {
         ++$this->cancelCalls;
 

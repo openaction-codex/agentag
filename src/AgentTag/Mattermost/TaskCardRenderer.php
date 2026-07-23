@@ -33,6 +33,9 @@ final readonly class TaskCardRenderer
             sprintf('Requested by %s · started %s', $this->requester($run), $this->relativeStart($run)),
             $this->modelLine($run),
         ];
+        if ($run->cancellationRequested() && null !== $run->stoppedByName()) {
+            $lines[] = 'Stop requested by @'.ltrim($run->stoppedByName(), '@').'.';
+        }
         $lines[] = '';
 
         foreach (array_slice($run->completedStages(), -5) as $stage) {
@@ -56,8 +59,17 @@ final readonly class TaskCardRenderer
 
     private function interrupted(AgentRun $run): string
     {
+        $stoppedBy = null === $run->stoppedByName()
+            ? null
+            : 'Stopped by @'.ltrim($run->stoppedByName(), '@').'.';
         if (AgentRun::WORKSPACE_CLEANUP_CLEANED === $run->workspaceCleanupState()) {
-            return $this->finishedTimeline($run, '⏹️', 'stopped after '.$this->duration($run), '■ Stopped', 'Workspace discarded.');
+            return $this->finishedTimeline(
+                $run,
+                '⏹️',
+                'stopped after '.$this->duration($run),
+                '■ Stopped',
+                implode("\n", array_values(array_filter([$stoppedBy, 'Workspace discarded.']))),
+            );
         }
 
         return $this->finishedTimeline(
@@ -65,7 +77,10 @@ final readonly class TaskCardRenderer
             '⏹️',
             'stopped after '.$this->duration($run),
             '■ Stopped',
-            sprintf('Workspace preserved until %s.', $run->retainedUntil()?->format('Y-m-d H:i \U\T\C') ?? 'the retention window expires'),
+            implode("\n", array_values(array_filter([
+                $stoppedBy,
+                sprintf('Workspace preserved until %s.', $run->retainedUntil()?->format('Y-m-d H:i \U\T\C') ?? 'the retention window expires'),
+            ]))),
         );
     }
 
