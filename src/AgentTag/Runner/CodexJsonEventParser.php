@@ -13,6 +13,8 @@ final class CodexJsonEventParser
     /** @var array<string, true> */
     private array $reportedMcpFailures = [];
 
+    private ?string $unattributedMcpStartupFailure = null;
+
     /**
      * @return list<AgentRunnerProgress>
      */
@@ -36,6 +38,12 @@ final class CodexJsonEventParser
     {
         $events = $this->flushBuffer($this->buffer, false);
         $events = [...$events, ...$this->flushBuffer($this->stderrBuffer, true)];
+        if (null !== $this->unattributedMcpStartupFailure && [] === $this->reportedMcpFailures) {
+            $events[] = new AgentRunnerProgress(
+                'mcp_startup_failed',
+                'An MCP server did not load; the task will continue without its tools.',
+            );
+        }
 
         return $events;
     }
@@ -170,10 +178,10 @@ final class CodexJsonEventParser
     {
         $item = $data['item'] ?? null;
         if (is_array($item) && in_array($item['type'] ?? null, ['agent_message', 'assistant_message'], true)) {
-            return null;
+            return $this->mcpFailureFromAgentMessage($this->messageFromData($item));
         }
         if (in_array($data['type'] ?? null, ['agent_message', 'assistant_message'], true)) {
-            return null;
+            return $this->mcpFailureFromAgentMessage($this->messageFromData($data));
         }
 
         return $this->mcpFailureFromText(implode(' ', $this->stringValues($data)), $this->mcpServerFromData($data));
@@ -188,7 +196,27 @@ final class CodexJsonEventParser
         }
 
         $server = $reportedServer ?? $this->mcpServerFromText($text);
-        $key = $server ?? hash('sha256', $text);
+        if (null === $server) {
+            $this->unattributedMcpStartupFailure ??= $text;
+
+            return null;
+        }
+
+        return $this->mcpFailureForServer($server);
+    }
+
+    private function mcpFailureFromAgentMessage(?string $message): ?AgentRunnerProgress
+    {
+        if (null === $message || 1 !== preg_match('/[`\'\"]?([A-Za-z0-9][A-Za-z0-9_.-]{0,127})[`\'\"]?\s+(?:n[’\']est\s+(?:pas\s+)?(?:exposé|disponible)|ne\s+répond\s+pas|is(?:\s+not|n[’\']t)?\s+(?:exposed|available)|is\s+unavailable|did\s+not\s+(?:load|start)|failed\s+to\s+(?:load|start))/iu', $message, $matches)) {
+            return null;
+        }
+
+        return $this->mcpFailureForServer(str_replace('_', '-', $matches[1]));
+    }
+
+    private function mcpFailureForServer(string $server): ?AgentRunnerProgress
+    {
+        $key = $server;
         if (isset($this->reportedMcpFailures[$key])) {
             return null;
         }
@@ -196,10 +224,8 @@ final class CodexJsonEventParser
 
         return new AgentRunnerProgress(
             'mcp_startup_failed',
-            null === $server
-                ? 'An MCP server did not load; the task will continue without its tools.'
-                : sprintf('The MCP server "%s" did not load; the task will continue without its tools.', $server),
-            null === $server ? [] : ['server' => $server],
+            sprintf('The MCP server "%s" did not load; the task will continue without its tools.', $server),
+            ['server' => $server],
         );
     }
 
@@ -208,7 +234,7 @@ final class CodexJsonEventParser
         $patterns = [
             '/\bmcp(?:\s+(?:server|client))?(?:\s+for)?\s*[`\'\"]?([A-Za-z0-9][A-Za-z0-9_.-]{0,127})/i',
             '/\bmcp[_\s-]server(?:[_\s-]name)?\s*[:=]\s*[`\'\"]?([A-Za-z0-9][A-Za-z0-9_.-]{0,127})/i',
-            '/\bmcp(?:\s+(?:server|client))?\s+(?:startup\s+)?(?:failed|timed?\s*out|timeout|error)[^A-Za-z0-9_.-]+[`\'\"]?([A-Za-z0-9][A-Za-z0-9_.-]{0,127})/i',
+            '/\bmcp(?:\s+(?:server|client))?\s+(?:startup\s+)?(?:failed|timed?\s*out|timeout|error)[^A-Za-z0-9_.-]+[`\'\"]([A-Za-z0-9][A-Za-z0-9_.-]{0,127})/i',
         ];
         foreach ($patterns as $pattern) {
             if (1 !== preg_match($pattern, $text, $matches)) {
