@@ -8,6 +8,8 @@ final readonly class TaskModelSelection
     private const array ROUTES = [
         'luna-high' => ['model' => 'gpt-5.6-luna', 'effort' => 'high', 'display' => 'GPT-5.6 Luna'],
         'luna-max' => ['model' => 'gpt-5.6-luna', 'effort' => 'max', 'display' => 'GPT-5.6 Luna'],
+        'luna-medium' => ['model' => 'gpt-5.6-luna', 'effort' => 'medium', 'display' => 'GPT-5.6 Luna'],
+        'luna-xhigh' => ['model' => 'gpt-5.6-luna', 'effort' => 'xhigh', 'display' => 'GPT-5.6 Luna'],
         'terra-medium' => ['model' => 'gpt-5.6-terra', 'effort' => 'medium', 'display' => 'GPT-5.6 Terra'],
         'terra-high' => ['model' => 'gpt-5.6-terra', 'effort' => 'high', 'display' => 'GPT-5.6 Terra'],
         'terra-xhigh' => ['model' => 'gpt-5.6-terra', 'effort' => 'xhigh', 'display' => 'GPT-5.6 Terra'],
