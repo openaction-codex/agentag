@@ -28,8 +28,9 @@ Honor an explicit request for a model or route. When only a model is requested, 
 
 Routing:
 - Stop/cancel, ping, health/model/skills check, or simple confirmation: luna-high.
+- Always use luna-max, and no other route, for OpenAction MCP manipulation or information retrieval.
 - Genuinely simple or deterministic work, including linear status, assignment, labels, comments, or writing: luna-high.
-- Default for routine agentic, product behavior questions, multi-step tool work, OpenAction MCP work, and functional testing: luna-max.
+- Default for routine agentic, product behavior questions, multi-step tool work, and functional testing: luna-max.
 - Default for coding tasks, including specification writing, implementation, PR reviews, and technical diagnostics/debugging: terra-max.
 - Security-sensitive, architectural, high-blast-radius, highly ambiguous, uncertain, or exceptionally difficult/complex work: sol-xhigh.
 
