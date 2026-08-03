@@ -122,6 +122,18 @@ chmod 0640 /srv/agentag/app/.env.local
 
 The worker passes `GITHUB_PAT_TOKEN` to each Codex CLI process. Keep it in `.env.local`; systemd workers do not source `/root/.bashrc`.
 
+### MCP startup timeout and alerts
+
+Codex allows 10 seconds for an MCP server to initialize by default. For a remote server that needs more time, add `startup_timeout_sec = 60` to its existing `[mcp_servers.<name>]` section in `/root/.codex/config.toml`, for example:
+
+```toml
+[mcp_servers.oa-ecologistes]
+url = "https://administrer.lesecologistes.fr/mcp"
+startup_timeout_sec = 60
+```
+
+When Codex reports that an MCP server did not start, AgentTag posts a warning in the Mattermost thread and continues the task without that server's tools. It never includes the raw startup error in Mattermost because it can contain sensitive connection details.
+
 Install PHP dependencies. Disable Composer auto-scripts here so `cache:clear` is not run as root and does not create a root-owned Symfony cache.
 
 ```bash

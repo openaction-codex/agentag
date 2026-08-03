@@ -69,11 +69,12 @@ final readonly class CodexCliRunner implements AgentRunnerInterface
         $interrupted = false;
         $reportedSessionId = $input->resumeSessionId();
         $callback = function (string $type, string $buffer) use ($input, $parser, &$reportedSessionId): void {
-            if ('out' !== $type && !str_ends_with($type, 'OUT')) {
-                return;
-            }
-
-            foreach ($parser->consume($buffer) as $progress) {
+            $progressEvents = match (true) {
+                'out' === $type || str_ends_with($type, 'OUT') => $parser->consume($buffer),
+                'err' === $type || str_ends_with($type, 'ERR') => $parser->consumeStderr($buffer),
+                default => [],
+            };
+            foreach ($progressEvents as $progress) {
                 $input->progressSink()?->onProgress($progress);
             }
             if (null !== $parser->threadId() && $parser->threadId() !== $reportedSessionId) {

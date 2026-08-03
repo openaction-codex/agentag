@@ -3,6 +3,8 @@
 namespace App\Tests\AgentTag\Runner;
 
 use App\AgentTag\Runner\AgentRunnerInput;
+use App\AgentTag\Runner\AgentRunnerProgress;
+use App\AgentTag\Runner\AgentRunnerProgressSink;
 use App\AgentTag\Runner\CodexCliRunner;
 use App\AgentTag\Runner\ProcessFactory;
 use App\AgentTag\Runner\RunnerProcess;
@@ -173,6 +175,31 @@ final class CodexCliRunnerTest extends TestCase
         self::assertTrue($factory->process->stopped);
     }
 
+    public function testItReportsMcpStartupFailuresWrittenToStderr(): void
+    {
+        $factory = new TraceableProcessFactory();
+        $factory->callbackErrorOutput = "MCP client for `oa-ecologistes` failed to initialize: request timed out\n";
+        $progressSink = new TraceableProgressSink();
+
+        (new CodexCliRunner($factory))->run(new AgentRunnerInput(
+            'Implement the task.',
+            $this->workingDirectory,
+            $this->artifactsDirectory,
+            [],
+            300,
+            'codex-full-access',
+            $progressSink,
+        ));
+
+        $mcpFailures = array_values(array_filter(
+            $progressSink->progress,
+            static fn (AgentRunnerProgress $progress): bool => 'mcp_startup_failed' === $progress->type(),
+        ));
+
+        self::assertCount(1, $mcpFailures);
+        self::assertSame(['server' => 'oa-ecologistes'], $mcpFailures[0]->context());
+    }
+
     public function testItPersistsTheCodexThreadAndResumesTheSameSession(): void
     {
         $factory = new TraceableProcessFactory();
@@ -292,6 +319,8 @@ final class TraceableProcessFactory implements ProcessFactory
 
     public string $callbackOutput = "{\"type\":\"agent_message\",\"message\":\"Working on it.\"}\n";
 
+    public string $callbackErrorOutput = '';
+
     /** @var array<string, string> */
     public array $replyFiles = [];
 
@@ -310,6 +339,7 @@ final class TraceableProcessFactory implements ProcessFactory
             $this->lastMessage,
             $this->stdout,
             $this->callbackOutput,
+            $this->callbackErrorOutput,
             $this->replyFiles,
         );
 
@@ -334,6 +364,7 @@ final class FakeRunnerProcess implements RunnerProcess
         private string $lastMessage,
         private string $stdout,
         private string $callbackOutput,
+        private string $callbackErrorOutput,
         /** @var array<string, string> */
         private array $replyFiles,
     ) {
@@ -365,6 +396,9 @@ final class FakeRunnerProcess implements RunnerProcess
         }
         if (null !== $callback) {
             $callback('out', $this->callbackOutput);
+            if ('' !== $this->callbackErrorOutput) {
+                $callback('err', $this->callbackErrorOutput);
+            }
         }
     }
 
@@ -419,5 +453,22 @@ final class FakeRunnerProcess implements RunnerProcess
     public function errorOutput(): string
     {
         return '';
+    }
+}
+
+final class TraceableProgressSink implements AgentRunnerProgressSink
+{
+    /** @var list<AgentRunnerProgress> */
+    public array $progress = [];
+
+    #[\Override]
+    public function onProgress(AgentRunnerProgress $progress): void
+    {
+        $this->progress[] = $progress;
+    }
+
+    #[\Override]
+    public function onHeartbeat(): void
+    {
     }
 }

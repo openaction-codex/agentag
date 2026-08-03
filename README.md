@@ -62,6 +62,18 @@ MATTERMOST_RECENT_REPLY_LIMIT=20
 
 `GITHUB_PAT_TOKEN` is passed to every Codex CLI process so GitHub MCP servers can authenticate. Define it in `.env.local`; non-interactive workers do not load shell startup files such as `.bashrc`.
 
+### MCP startup timeout and alerts
+
+Codex waits 10 seconds by default for each MCP server to initialize. Set a longer timeout in the root worker's `/root/.codex/config.toml` for every remote server that may be slow to establish OAuth or list its tools:
+
+```toml
+[mcp_servers.oa-ecologistes]
+url = "https://administrer.lesecologistes.fr/mcp"
+startup_timeout_sec = 60
+```
+
+AgentTag posts a warning in the Mattermost thread whenever Codex reports an MCP startup failure. The task continues without that server's tools, and the warning intentionally omits the raw error detail to avoid exposing credentials or endpoint internals.
+
 `DEFAULT_URI` must be the public AgentTag origin. Mattermost uses it to call `/integrations/mattermost/action` when a user clicks a task-card button. If AgentTag is on a private address, allow that address in Mattermost’s `AllowedUntrustedInternalConnections` setting.
 
 `AGENTAG_NOTIFICATION_PREFERENCE` accepts `all`, `milestones`, or `completion`. Users can override it per task with phrases such as “notify me only when complete” or “notify me on every update.” A request can set a shorter deadline with “deadline in 3 hours” (minutes, hours, and days are supported).

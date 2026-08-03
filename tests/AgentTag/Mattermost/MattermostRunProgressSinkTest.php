@@ -57,6 +57,23 @@ final class MattermostRunProgressSinkTest extends TestCase
         self::assertStringContainsString('Model: **GPT-5.6 Sol · medium** — General non-coding task.', $notifier->updatedPosts[0]);
     }
 
+    public function testItPostsOneMcpStartupWarningWithoutChangingTheTaskCard(): void
+    {
+        $notifier = new ProgressTraceableMattermostNotifier();
+        $sink = $this->sink($notifier, $this->task());
+        $failure = new AgentRunnerProgress(
+            'mcp_startup_failed',
+            'The MCP server "oa-ecologistes" did not load; the task will continue without its tools.',
+            ['server' => 'oa-ecologistes'],
+        );
+
+        $sink->onProgress($failure);
+        $sink->onProgress($failure);
+
+        self::assertSame(['⚠️ The MCP server "oa-ecologistes" did not load; the task will continue without its tools.'], $notifier->threadMessages);
+        self::assertSame([], $notifier->updatedPosts);
+    }
+
     public function testFinishKeepsTheStepsAndPostsTheAnswerAfterTheCardOnlyOnce(): void
     {
         $notifier = new ProgressTraceableMattermostNotifier();

@@ -15,6 +15,9 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
     private int $lastUpdatedAt = 0;
     private int $lastTypingAt = 0;
 
+    /** @var array<string, true> */
+    private array $notifiedMcpFailures = [];
+
     public function __construct(
         private readonly MattermostNotifier $notifier,
         private readonly MattermostInboundEvent $event,
@@ -30,6 +33,11 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
     #[\Override]
     public function onProgress(AgentRunnerProgress $progress): void
     {
+        if ('mcp_startup_failed' === $progress->type()) {
+            $this->notifyMcpStartupFailure($progress);
+
+            return;
+        }
         if ('agent_message' !== $progress->type()) {
             return;
         }
@@ -71,6 +79,18 @@ final class MattermostRunProgressSink implements AgentRunnerProgressSink
         if ('completion' !== $this->run->notificationPreference()) {
             $this->notifier->postProgress($this->event, $message);
         }
+    }
+
+    private function notifyMcpStartupFailure(AgentRunnerProgress $progress): void
+    {
+        $server = $progress->context()['server'] ?? null;
+        $key = is_string($server) ? $server : $progress->message();
+        if (isset($this->notifiedMcpFailures[$key])) {
+            return;
+        }
+        $this->notifiedMcpFailures[$key] = true;
+
+        $this->notifier->postProgress($this->event, '⚠️ '.$progress->message());
     }
 
     private function updateCard(): void
